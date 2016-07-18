@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 14
+VisualStudioVersion = 14.0.25420.1
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenAL Music Player", "OpenAL Music Player\OpenAL Music Player.csproj", "{CF258EE3-37F2-4AD0-82D9-1481F29FFFB9}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Documentation|Any CPU = Documentation|Any CPU
+		Nsis|Any CPU = Nsis|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{CF258EE3-37F2-4AD0-82D9-1481F29FFFB9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CF258EE3-37F2-4AD0-82D9-1481F29FFFB9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CF258EE3-37F2-4AD0-82D9-1481F29FFFB9}.Documentation|Any CPU.ActiveCfg = Debug|Any CPU
+		{CF258EE3-37F2-4AD0-82D9-1481F29FFFB9}.Documentation|Any CPU.Build.0 = Debug|Any CPU
+		{CF258EE3-37F2-4AD0-82D9-1481F29FFFB9}.Nsis|Any CPU.ActiveCfg = Release|Any CPU
+		{CF258EE3-37F2-4AD0-82D9-1481F29FFFB9}.Nsis|Any CPU.Build.0 = Release|Any CPU
+		{CF258EE3-37F2-4AD0-82D9-1481F29FFFB9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CF258EE3-37F2-4AD0-82D9-1481F29FFFB9}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

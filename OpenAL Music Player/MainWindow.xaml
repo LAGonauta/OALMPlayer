@@ -1,0 +1,123 @@
+﻿<Window x:Class="OpenAL_Music_Player.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:OpenAL_Music_Player"
+        mc:Ignorable="d"
+        Title="OpenAL Music Player" Height="500" Width="640" MinWidth="640" MinHeight="500"
+        Closing="Window_Closing">
+
+    <Grid>
+        <Menu HorizontalAlignment="Left" Height="20" VerticalAlignment="Top" Width="632">
+            <MenuItem Header="_File " >
+                <MenuItem Header="_Open folder..." Click="Open_Click"/>
+                <MenuItem Header="_Open playlist..." />
+            </MenuItem>
+            <MenuItem Header="_Something?">
+                <MenuItem Header="_Hello"/>
+            </MenuItem>
+            <MenuItem Header="_Help " >
+                <MenuItem Header="_About"  Click="AboutItem_Click"/>
+            </MenuItem>
+        </Menu>
+        <Border Height="56" Margin="10,30,0,0" BorderThickness="1" VerticalAlignment="Top" HorizontalAlignment="Left" Width="462">
+            <Border.BorderBrush>
+                <SolidColorBrush Color="{DynamicResource {x:Static SystemColors.ActiveBorderColorKey}}"/>
+            </Border.BorderBrush>
+            <Grid>
+                <ComboBox x:Name="DeviceChoice" Text="Select your device" HorizontalAlignment="Left" Margin="10,14,0,0" VerticalAlignment="Top" Width="169" SelectionChanged="DeviceChoice_SelectionChanged">
+                    <ComboBoxItem Content="Select your device" IsSelected="True"></ComboBoxItem>
+                </ComboBox>
+                <GroupBox Header="CPU Usage" HorizontalAlignment="Left" Margin="184,0,0,0" VerticalAlignment="Top" Height="45" Width="80">
+                    <TextBlock x:Name="CPUUsagePercent" Margin="10,4,16,3" TextWrapping="Wrap" Height="16" HorizontalAlignment="Center" VerticalAlignment="Center" Width="42"/>
+                </GroupBox>
+                <GroupBox Header="Playback controls" HorizontalAlignment="Left" Margin="278,0,0,0" VerticalAlignment="Top" Height="45" Width="172">
+                    <Grid HorizontalAlignment="Left" Height="24" Margin="0,0,-2,-1" VerticalAlignment="Top" Width="162">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Button x:Name="SoundPlayPause" Content="Play" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,0" Grid.Column="0" Click="Play_Click"/>
+                        <Button x:Name="SoundStop" Content="Stop" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,0" Grid.Column="1" Click="Stop_Click"/>
+                        <Button x:Name="SoundBack" Content="Back" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,0" Grid.Column="2" Click="Back_Click"/>
+                        <Button x:Name="SoundNext" Content="Next" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,0" Grid.Column="3" Click="Next_Click"/>
+                    </Grid>
+                </GroupBox>
+            </Grid>
+        </Border>
+        <Button x:Name="StartTest" Content="What?" HorizontalAlignment="Left" Margin="477,30,0,0" VerticalAlignment="Top" Width="145"/>
+        <GroupBox Header="Playlist" HorizontalAlignment="Left" Margin="10,91,0,0" VerticalAlignment="Top" Height="368" Width="312">
+            <Border BorderThickness="1" Margin="5">
+                <Border.BorderBrush>
+                    <SolidColorBrush Color="{DynamicResource {x:Static SystemColors.ActiveBorderColorKey}}"/>
+                </Border.BorderBrush>
+                <ListBox x:Name="playlistItems">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Title}" />
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="{x:Type ListBoxItem}" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                            <EventSetter Event="MouseDoubleClick" Handler="playlistItem_MouseDoubleClick"/>
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                </ListBox>
+            </Border>
+        </GroupBox>
+        <GroupBox Header="Something Display" HorizontalAlignment="Left" Margin="327,91,0,0" VerticalAlignment="Top" Height="368" Width="295">
+            <Grid Margin="0,0,-7,0" RenderTransformOrigin="-0.52,-0.056">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <Grid Grid.Row="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="infoText" Text="Test" Grid.Column="0"/>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="Volume"/>
+                        <Slider Grid.Column="1" Value="1" ValueChanged="Slider_ValueChanged" Maximum="1" LargeChange="0.1"/>
+                    </StackPanel>
+                </Grid>
+                <Grid Grid.Row="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <StackPanel Grid.Row="0" Grid.RowSpan="1" Grid.Column="0" Grid.ColumnSpan="1">
+                        <Separator/>
+                        <TextBlock Text="Effects"/>
+                        <CheckBox/>
+                        <Separator/>
+                        <TextBlock Text="Type"/>
+                        <ComboBox>
+                            <ComboBoxItem>
+                                <TextBlock Text="Reverb"/>
+                            </ComboBoxItem>
+                            <ComboBoxItem>
+                                <TextBlock Text="Echo"/>
+                            </ComboBoxItem>
+                        </ComboBox>
+                    </StackPanel>
+                    <TextBlock Text="Pitch? Speed?" Grid.Row="1" Grid.RowSpan="1" Grid.Column="0" Grid.ColumnSpan="1"/>
+                    <StackPanel Grid.Column="1" Grid.Row="1">
+                        <TextBlock Text="Speed"/>
+                        <Slider x:Name="SpeedSlider"/>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </GroupBox>
+        <DockPanel HorizontalAlignment="Left" Height="20" LastChildFill="False" VerticalAlignment="Top" Width="632"/>
+        <Button Content="Nope" HorizontalAlignment="Left" Margin="477,66,0,0" VerticalAlignment="Top" Width="145" />
+    </Grid>
+</Window>
