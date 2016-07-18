@@ -82,7 +82,7 @@
                     <TextBlock x:Name="infoText" Text="Test" Grid.Column="0"/>
                     <StackPanel Grid.Column="1">
                         <TextBlock Text="Volume"/>
-                        <Slider Grid.Column="1" Value="1" ValueChanged="Slider_ValueChanged" Maximum="1" LargeChange="0.1"/>
+                        <Slider Grid.Column="1" Value="100" ValueChanged="Slider_ValueChanged" Maximum="100" LargeChange="10" AutoToolTipPlacement="BottomRight" SmallChange="1"/>
                     </StackPanel>
                 </Grid>
                 <Grid Grid.Row="1">
@@ -112,7 +112,7 @@
                     <TextBlock Text="Pitch? Speed?" Grid.Row="1" Grid.RowSpan="1" Grid.Column="0" Grid.ColumnSpan="1"/>
                     <StackPanel Grid.Column="1" Grid.Row="1">
                         <TextBlock Text="Speed"/>
-                        <Slider x:Name="SpeedSlider"/>
+                        <Slider x:Name="SpeedSlider" AutoToolTipPlacement="BottomRight" Minimum="-50" Maximum="50" LargeChange="10" SmallChange="1"/>
                     </StackPanel>
                 </Grid>
             </Grid>

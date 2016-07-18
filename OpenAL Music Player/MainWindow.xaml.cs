@@ -89,19 +89,7 @@ namespace OpenAL_Music_Player
         {
             InitializeComponent();
 
-            // Set playlist
-            //ObservableCollection<playlistItemsList> items = new ObservableCollection<playlistItemsList>();
             playlistItems.ItemsSource = items;
-
-            //for (int i = 0; i < filePaths.Length; i++)
-            //{
-            //    items.Add(new playlistItemsList() { Title = (i + 1 + ". " + filePaths[i]) });
-            //}
-
-            //for (int i = items.Count - 1; i >= 0; i--)
-            //{
-            //    items.RemoveAt(i);
-            //}
 
             // Load last selected device from file, if not found use default
             if (File.Exists(config_file))
@@ -115,7 +103,7 @@ namespace OpenAL_Music_Player
                 Trace.WriteLine("Using default device");
             }
 
-            // Starting test thread
+            // Starting audio thread
             Thread openal_thread = new Thread(new ThreadStart(OpenALThread));
             openal_thread.Start();
                 
@@ -143,6 +131,7 @@ namespace OpenAL_Music_Player
         public static bool oalthread_enabled = true;
         public static bool start_playback = false;
         public static bool stop_playback = false;
+        public static bool change_file = false;
         public static bool goto_next = false;
         public static bool goto_next_from_playlist = false;
         public static bool goback = false;
@@ -265,10 +254,7 @@ namespace OpenAL_Music_Player
 
             // Parametric
             double t_parametric = 0;
-
             #endregion
-
-            // Goto's are used here, sorry. I use them to cleanup OpenAL when the user closes the window and I don't want to do anything else (like play a source or print a line). Do you have a better solution? Share it, please :)
 
             #region Playback
             while (playbackthread_enabled)
@@ -278,8 +264,8 @@ namespace OpenAL_Music_Player
                 {
                     #region Buffer
                     // Generating sources
-                    Trace.WriteLine("Generating sources");
-                    source = AL.GenSource(); // One source
+                    Trace.WriteLine("Generating source");
+                    source = AL.GenSource();
 
                     oal_error = AL.GetError();
                     if (oal_error != ALError.NoError)
@@ -288,8 +274,8 @@ namespace OpenAL_Music_Player
                     }
 
                     // Setting up buffers
-                    Trace.WriteLine("Setting up buffers");
-                    buffer = AL.GenBuffer(); // One buffer, the second is a dummy buffer to release memory
+                    Trace.WriteLine("Setting up buffer");
+                    buffer = AL.GenBuffer();
                     oal_error = AL.GetError();
                     if (oal_error != ALError.NoError)
                     {
@@ -306,6 +292,7 @@ namespace OpenAL_Music_Player
                     TimeSpan total_time_temp;
 
                     AudioFile = File.OpenRead(filePaths[file_number]);
+
                     if (filePaths[file_number].EndsWith(".mp3", StringComparison.OrdinalIgnoreCase))
                     {
                         sound_data = LoadMP3(AudioFile, out channels, out bits_per_sample, out sample_rate, out total_time_temp);
@@ -334,8 +321,7 @@ namespace OpenAL_Music_Player
                     }
 
                     total_time = total_time_temp;
-                    ALFormat soundformat = GetSoundFormat(channels, bits_per_sample);
-                    AL.BufferData(buffer, soundformat, sound_data, sound_data.Length, sample_rate);
+                    AL.BufferData(buffer, GetSoundFormat(channels, bits_per_sample), sound_data, sound_data.Length, sample_rate);
 
                     oal_error = AL.GetError();
                     if (oal_error != ALError.NoError)
@@ -497,44 +483,16 @@ namespace OpenAL_Music_Player
                             mudando_volume = false;
                         }
 
-                        if (stop_playback)
+                        if (change_file)
                         {
-                            //file_number = 0; // It is better to this this at the end
-                            is_playing = false;
-                            stop_playback = false;
                             break;
                         }
-                        else if (goto_next)
+
+                        // Needed on newer X-Fi drivers. I could also change the source to streaming, but with this we can be sure.
+                        if (music_current_time > total_time_seconds)
                         {
-                            //file_number++; // It is better to this this at the end
-                            goto_next = false;
                             break;
                         }
-                        else if (goback)
-                        {
-                            if (file_number > 0)
-                            {
-                                // Just break here, we need to set this at the end before the file number add operation
-                                //file_number = file_number - 1;
-                                //goback = false; 
-                                break;
-                            }
-                            else
-                            {
-                                goback = false;
-                            }
-
-                            //if (file_number == 0)
-                            //{
-                            //    goback = false;
-                            //}
-                        }
-
-                        // Needed on newer drivers. Doesn't work with speed shift.
-                        //if (music_current_time > total_time_seconds)
-                        //{
-                        //    break;
-                        //}
 
                         information_text = ("Música atual: " + (file_number + 1)) + Environment.NewLine + ("Posição: " + music_current_time + "s/" + total_time_seconds + "s") + Environment.NewLine + ("Volume: " + (int)(double_volume * 100) + "%") + Environment.NewLine + ("Velocidade: " + int_playback_speed * 10 + "%");
 
@@ -579,38 +537,22 @@ namespace OpenAL_Music_Player
                         Trace.WriteLine("Unable to delete buffer: " + oal_error);
                     }
 
-                    if (file_number == (filePaths.Length - 1) && !goback && !goto_next_from_playlist)
+                    if (file_number == (filePaths.Length - 1) && !change_file)
                     {
-                        // Restart playback, or stop playback.
-                        file_number = 0; // Restarting here
+                        // Restart playback.
+                        file_number = 0;
+                    }
+                    else if (change_file)
+                    {
+                        change_file = false;
+                        break;
                     }
                     else
                     {
-                        if (!is_playing)
-                        {
-                            file_number = 0;
-                        }
-                        else if (goback)
-                        {
-                            file_number = file_number - 1;
-                            goback = false;
-                        }
-                        else
-                        {
-                            if (!goto_next_from_playlist)
-                            {
-                                file_number++; 
-                            }
-                            else
-                            {
-                                goto_next_from_playlist = false;
-                            }
-                        }
+                        file_number++;
                     }
-
                 }
             }
-
             #endregion
 
             EFX.DeleteAuxiliaryEffectSlot(slot);
@@ -742,12 +684,8 @@ namespace OpenAL_Music_Player
 
         private void Open_Click(object sender, RoutedEventArgs e)
         {
-            //var dialog = new System.Windows.Forms.FolderBrowserDialog();
-            //System.Windows.Forms.DialogResult result = dialog.ShowDialog();
-
             using (FolderBrowserDialog dlgOpen = new FolderBrowserDialog())
             {
-                //dlgOpen. = Environment.GetFolderPath(Environment.SpecialFolder.MyMusic);
                 dlgOpen.Description = "Escolha a pasta para tocar";
 
                 System.Windows.Forms.DialogResult result = dlgOpen.ShowDialog();
@@ -760,7 +698,6 @@ namespace OpenAL_Music_Player
                     }
                     Thread.Sleep(250); // So we are sure that notthing bad happens...
                     var allowedExtensions = new[] { ".mp3", ".wav", ".wma", ".ogg", ".flac" };
-                    //filePaths = Directory.GetFiles(dlgOpen.SelectedPath)
                     filePaths = Directory.GetFiles(dlgOpen.SelectedPath).Where(file => allowedExtensions.Any(file.ToLower().EndsWith)).ToArray();
                     playListGen();
                 }
@@ -775,8 +712,8 @@ namespace OpenAL_Music_Player
                 {
                     if (paused && is_playing)
                     {
-                        pause_change = true;
                         paused = false;
+                        pause_change = true;
                     }
                     else if (!is_playing)
                     {
@@ -802,17 +739,33 @@ namespace OpenAL_Music_Player
 
         private void Next_Click(object sender, RoutedEventArgs e)
         {
-            goto_next = true;
+            file_number++;
+
+            if (file_number == filePaths.Length) // When it reaches the end of the list.
+                file_number = 0;
+
+            change_file = true;
         }
 
         private void Stop_Click(object sender, RoutedEventArgs e)
         {
+            file_number = 0;
+            is_playing = false;
             stop_playback = true;
+            change_file = true;
         }
 
         private void Back_Click(object sender, RoutedEventArgs e)
         {
-            goback = true;
+            if (file_number > 0)
+            {
+                file_number--;
+            }
+            else
+            {
+                file_number = filePaths.Length - 1;
+            }
+            change_file = true;
         }
 
         private void AboutItem_Click(object sender, RoutedEventArgs e)
@@ -823,19 +776,10 @@ namespace OpenAL_Music_Player
 
         private void playlistItem_MouseDoubleClick(object sender, RoutedEventArgs e)
         {
-            Trace.WriteLine("Double click! " + playlistItems.SelectedIndex);
             if (file_number != playlistItems.SelectedIndex)
             {
-                if (playlistItems.SelectedIndex == 0)
-                {
-                    file_number = 0;
-                }
-                else
-                {
-                    file_number = playlistItems.SelectedIndex;
-                    goto_next = true;
-                    goto_next_from_playlist = true;
-                }
+                file_number = playlistItems.SelectedIndex;
+                change_file = true;
 
                 if (!is_playing)
                 {
@@ -844,19 +788,25 @@ namespace OpenAL_Music_Player
 
                 if (paused)
                 {
-                    SoundPlayPause.Content = "Play";
-                }
-                else
-                {
                     SoundPlayPause.Content = "Pause";
+                    paused = false;
+                    pause_change = true;
                 }
             }
-    }
+            else
+            {
+                if (!is_playing)
+                {
+                    change_file = true;
+                    is_playing = true;
+                }
+            }
+        }
 
         private void Slider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
-            double_volume = e.NewValue;
-            volume = 0.0031623f * (float)Math.Exp(double_volume * 5.757);
+            double_volume = e.NewValue / 100;
+            volume = 0.0031623f * (float)Math.Exp(double_volume * 5.757f);
             mudando_volume = true;
         }
 
@@ -921,6 +871,7 @@ namespace OpenAL_Music_Player
             stop_playback = true;
             playbackthread_enabled = false;
             is_playing = false;
+            change_file = true;
         }
 
         #endregion
@@ -996,40 +947,6 @@ namespace OpenAL_Music_Player
                 reader.Read(buffer, 0, buffer.Length);
 
                 return buffer;
-            }
-        }
-
-        public static short[] LoadWaveShort(Stream stream, out int channels, out int bits, out int rate, out System.TimeSpan totaltime)
-        {
-            if (stream == null)
-                throw new ArgumentNullException("stream");
-
-            using (WaveFileReader reader = new WaveFileReader(stream))
-            {
-                int num_channels = reader.WaveFormat.Channels;
-                int sample_rate = reader.WaveFormat.SampleRate;
-                int bits_per_sample = reader.WaveFormat.BitsPerSample;
-                totaltime = reader.TotalTime;
-
-                channels = num_channels;
-                bits = bits_per_sample;
-                rate = sample_rate;
-
-                if (bits != 16)
-                {
-                    Trace.WriteLine("Only works with 16 bit audio, this on is " + bits + "-bit");
-
-                }
-
-                // Byte array
-                byte[] buffer = new byte[reader.Length];
-                int read = reader.Read(buffer, 0, buffer.Length);
-
-                // Convert to short
-                short[] sampleBuffer = new short[read / 2];
-                Buffer.BlockCopy(buffer, 0, sampleBuffer, 0, read);
-
-                return sampleBuffer;
             }
         }
 
@@ -1132,12 +1049,14 @@ namespace OpenAL_Music_Player
 
                 for (uint i = 0; i < read / 4; ++i)
                 {
-                    if (waveBuffer.FloatBuffer[i] >= 1.0)
+                    waveBuffer.FloatBuffer[i] = waveBuffer.FloatBuffer[i] * (1 << 16);
+
+                    if (waveBuffer.FloatBuffer[i] > 32767)
                         sampleBufferShort[i] = 32767;
-                    else if (waveBuffer.FloatBuffer[i] <= 1.0)
+                    else if (waveBuffer.FloatBuffer[i] < -32768)
                         sampleBufferShort[i] = -32768;
                     else
-                        sampleBufferShort[i] = (short)Math.Floor(waveBuffer.FloatBuffer[i] * (1 << 16));
+                        sampleBufferShort[i] = (short)(waveBuffer.FloatBuffer[i]);
                 }
 
                 for (uint i = 0, z = 0; i < read / 4; ++i, z += 2)
@@ -1147,40 +1066,6 @@ namespace OpenAL_Music_Player
                 }
 
                 return buffer;
-            }
-        }
-
-        public static short[] LoadMP3Short(Stream stream, out int channels, out int bits, out int rate, out System.TimeSpan totaltime)
-        {
-            if (stream == null)
-                throw new ArgumentNullException("stream");
-
-            using (Mp3FileReader reader = new Mp3FileReader(stream))
-            {
-                int num_channels = reader.Mp3WaveFormat.Channels;
-                int sample_rate = reader.Mp3WaveFormat.SampleRate;
-                int bits_per_sample = reader.Mp3WaveFormat.BitsPerSample;
-                totaltime = reader.TotalTime;
-
-                channels = num_channels;
-                bits = bits_per_sample;
-                rate = sample_rate;
-
-                if (bits != 16)
-                {
-                    Trace.WriteLine("Only works with 16 bit audio, this on is " + bits + "-bit");
-
-                }
-
-                // Byte array
-                byte[] buffer = new byte[reader.Length];
-                int read = reader.Read(buffer, 0, buffer.Length);
-
-                // Convert to short
-                short[] sampleBuffer = new short[read / 2];
-                Buffer.BlockCopy(buffer, 0, sampleBuffer, 0, read);
-
-                return sampleBuffer;
             }
         }
 
