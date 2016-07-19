@@ -733,18 +733,28 @@ namespace OpenAL_Music_Player
                     {
                         SoundPlayPause.Content = "Pause";
                     }
+
+                    playlistItems.SelectedIndex = file_number;
                 } 
             }
         }
 
         private void Next_Click(object sender, RoutedEventArgs e)
         {
-            file_number++;
+            if (filePaths != null)
+            {
+                if (filePaths.Length > 0)
+                {
+                    file_number++;
 
-            if (file_number == filePaths.Length) // When it reaches the end of the list.
-                file_number = 0;
+                    if (file_number == filePaths.Length) // When it reaches the end of the list.
+                        file_number = 0;
 
-            change_file = true;
+                    playlistItems.SelectedIndex = file_number;
+
+                    change_file = true;
+                }
+            }
         }
 
         private void Stop_Click(object sender, RoutedEventArgs e)
@@ -757,15 +767,23 @@ namespace OpenAL_Music_Player
 
         private void Back_Click(object sender, RoutedEventArgs e)
         {
-            if (file_number > 0)
+            if (filePaths != null)
             {
-                file_number--;
+                if (filePaths.Length > 0)
+                {
+                    if (file_number > 0)
+                    {
+                        file_number--;
+                    }
+                    else
+                    {
+                        file_number = filePaths.Length - 1;
+                    }
+
+                    playlistItems.SelectedIndex = file_number;
+                    change_file = true;
+                }
             }
-            else
-            {
-                file_number = filePaths.Length - 1;
-            }
-            change_file = true;
         }
 
         private void AboutItem_Click(object sender, RoutedEventArgs e)
