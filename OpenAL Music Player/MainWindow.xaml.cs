@@ -11,7 +11,6 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Threading;
-using System.Timers;
 using System.Windows;
 using System.Windows.Forms;
 using System.Windows.Controls;
@@ -55,6 +54,7 @@ namespace OpenAL_Music_Player
         // Multithreaded controls
         public static bool playbackthread_enabled = true;
         public static bool is_playing = false;
+        public static int update_time_ms = 150;
 
         // CPU usage
         private static PerformanceCounter theCPUCounter = new PerformanceCounter("Process", "% Processor Time", Process.GetCurrentProcess().ProcessName);
@@ -65,9 +65,6 @@ namespace OpenAL_Music_Player
         double pos_y = 0;
         double pos_z = 0;
         double rotation_degree = 0;
-
-        // Screen update rate timer
-        public static System.Timers.Timer glinvalidate_timer = new System.Timers.Timer();
 
         // Multisource positioning OAL -> OGL communication variables
         Vector3 red_position = new Vector3(0, 0, 0);
@@ -132,35 +129,25 @@ namespace OpenAL_Music_Player
         public static bool start_playback = false;
         public static bool stop_playback = false;
         public static bool change_file = false;
-        public static bool goto_next = false;
-        public static bool goto_next_from_playlist = false;
-        public static bool goback = false;
-        public static bool effects_enabled = true;
         public static float volume = 1;
         public static double double_volume = 1;
         public static float playback_speed = 1f;
-        public static int int_playback_speed = 10;
         public static bool mudando_velocidade = false;
         public static bool mudando_volume = false;
-
-        // Create timer to use when playing music
-        public static System.Timers.Timer music_timer = new System.Timers.Timer();
-        public static int music_current_time;
+        public static bool effects_enabled = false;
+        public static bool pitch_shift_enabled = false;
 
         public void OpenALThread()
         {
             OpenTK.Audio.OpenAL.ALError oal_error;
             string information_text;
+            float music_current_time = 0;
 
             oal_error = AL.GetError();
             if (oal_error != ALError.NoError)
             {
                 Trace.WriteLine("Error starting oal error (yeah)" + oal_error);
             }
-
-            // Set timer properties
-            music_timer.Elapsed += new ElapsedEventHandler(SetMusicCurrentTime);
-            music_timer.Interval = 1000;
 
             AllPlaybackDevices = AudioContext.AvailableDevices;
             DeviceChoice.Dispatcher.Invoke(new UpdateDeviceListCallBack(this.UpdateDeviceList));
@@ -207,6 +194,7 @@ namespace OpenAL_Music_Player
             int buffer = 0;
             int source = 0;
 
+            // Need to change to last used effect, or null effect.
             if (IsXFi)
             {
                 // Generating effects
@@ -224,37 +212,6 @@ namespace OpenAL_Music_Player
 
             // Default speed
             int[] pitch_correction = PitchCorrection(playback_speed);
-
-            #region Setting up OAL Variables
-            // Listener position and direction. Remember: right-handed axis
-            Vector3 ListenerDirection = new Vector3(0f, 0f, -1f);
-            Vector3 ListenerDirectionUP = new Vector3(0f, 1f, 0f);
-            Vector3 ListenerPosition = new Vector3(0f, 0f, 0f);
-            Vector3 SourceDirection = new Vector3(0f, 0f, 1f);
-            Vector3 SourcePosition = new Vector3(0f, 0f, -1f); // Default to 1m
-            Vector3 SourceVelocity = new Vector3(0f, 0f, 0f); // Default to 0m/s
-            Vector3 ListenerVelocity = new Vector3(0f, 0f, 0f); // Default to 0m/s
-            int degrees = 0;
-
-            // For multisource test
-            Vector3 RedVelocity = new Vector3(0f, 0f, 0f);
-            Vector3 BlueVelocity = new Vector3(0f, 0f, 0f);
-            Vector3 GreenVelocity = new Vector3(0f, 0f, 0f);
-            Vector3 PinkVelocity = new Vector3(0f, 0f, 0f);
-
-            // Position.
-            double position_z = 0;
-            double position_x = 0;
-            double position_y = 0;
-
-            // Direction
-            double direction_x;
-            //double direction_y;
-            double direction_z;
-
-            // Parametric
-            double t_parametric = 0;
-            #endregion
 
             #region Playback
             while (playbackthread_enabled)
@@ -354,7 +311,7 @@ namespace OpenAL_Music_Player
                     AL.Source(source, ALSourcef.Gain, volume);
 
                     // Correcting effect and filter to match last played file
-                    if (int_playback_speed == 10)
+                    if (!pitch_shift_enabled || Math.Truncate(playback_speed * 100) == 100)
                     {
                         if (IsXFi)
                         {
@@ -363,16 +320,13 @@ namespace OpenAL_Music_Player
                             EFX.BindFilterToSource(source, filter);
 
                             // Disabling effect
-                            EFX.Effect(effect, EfxEffecti.PitchShifterCoarseTune, pitch_correction[0]);
-                            EFX.Effect(effect, EfxEffecti.PitchShifterFineTune, pitch_correction[1]);
+                            EFX.Effect(effect, EfxEffecti.PitchShifterCoarseTune, 0);
+                            EFX.Effect(effect, EfxEffecti.PitchShifterFineTune, 0);
                             EFX.AuxiliaryEffectSlot(slot, EfxAuxiliaryi.EffectslotEffect, (int)EfxEffectType.Null);
                         }
 
                         // Changing pitch
-                        AL.Source(source, ALSourcef.Pitch, playback_speed);
-
-                        // Correcting playback timer
-                        music_timer.Interval = 1000 * (double)10 / int_playback_speed;
+                        AL.Source(source, ALSourcef.Pitch, 1f);
                     }
                     else
                     {
@@ -390,12 +344,8 @@ namespace OpenAL_Music_Player
 
                         // Change source speed
                         AL.Source(source, ALSourcef.Pitch, playback_speed);
-
-                        // Correcting playback timer
-                        music_timer.Interval = (double)1000 * 10 / int_playback_speed;
                     }
 
-                    music_timer.Start();
                     AL.SourcePlay(source);
 
                     oal_error = AL.GetError();
@@ -410,29 +360,25 @@ namespace OpenAL_Music_Player
                     #region Playback
                     while (AL.GetSourceState(source) == ALSourceState.Playing || AL.GetSourceState(source) == ALSourceState.Paused) // We want to wait until application exit
                     {
-                        Thread.Sleep(250);
+                        Thread.Sleep(update_time_ms);
 
                         if (pause_change)
                         {
                             if (paused)
                             {
                                 AL.SourcePause(source);
-                                music_timer.Stop();
                                 pause_change = false;
                             }
                             else
                             {
                                 AL.SourcePlay(source);
-                                music_timer.Start();
                                 pause_change = false;
                             }
                         }
 
                         if (mudando_velocidade)
                         {
-                            pitch_correction = PitchCorrection(playback_speed);
-
-                            if (int_playback_speed == 10)
+                            if (Math.Truncate(playback_speed * 100) == 100)
                             {
                                 if (IsXFi)
                                 {
@@ -441,22 +387,20 @@ namespace OpenAL_Music_Player
                                     EFX.BindFilterToSource(source, filter);
 
                                     // Disabling effect
-                                    EFX.Effect(effect, EfxEffecti.PitchShifterCoarseTune, pitch_correction[0]);
-                                    EFX.Effect(effect, EfxEffecti.PitchShifterFineTune, pitch_correction[1]);
+                                    EFX.Effect(effect, EfxEffecti.PitchShifterCoarseTune, 0);
+                                    EFX.Effect(effect, EfxEffecti.PitchShifterFineTune, 0);
                                     EFX.AuxiliaryEffectSlot(slot, EfxAuxiliaryi.EffectslotEffect, (int)EfxEffectType.Null);
                                 }
 
                                 // Changing pitch
-                                AL.Source(source, ALSourcef.Pitch, playback_speed);
-
-                                // Correcting playback timer
-                                music_timer.Interval = (double)1000 * 10 / int_playback_speed;
+                                AL.Source(source, ALSourcef.Pitch, 1f);
                             }
                             else
                             {
-                                if (IsXFi)
+                                if (IsXFi && pitch_shift_enabled)
                                 {
                                     // Changing effect
+                                    pitch_correction = PitchCorrection(playback_speed);
                                     EFX.Effect(effect, EfxEffecti.PitchShifterCoarseTune, pitch_correction[0]);
                                     EFX.Effect(effect, EfxEffecti.PitchShifterFineTune, pitch_correction[1]);
                                     EFX.AuxiliaryEffectSlot(slot, EfxAuxiliaryi.EffectslotEffect, effect);
@@ -468,9 +412,6 @@ namespace OpenAL_Music_Player
 
                                 // Change source speed
                                 AL.Source(source, ALSourcef.Pitch, playback_speed);
-
-                                // Correcting playback timer
-                                music_timer.Interval = (double)1000 * 10 / int_playback_speed;
                             }
 
                             mudando_velocidade = false;
@@ -488,13 +429,14 @@ namespace OpenAL_Music_Player
                             break;
                         }
 
+                        AL.GetSource(source, ALSourcef.SecOffset, out music_current_time);
                         // Needed on newer X-Fi drivers. I could also change the source to streaming, but with this we can be sure.
-                        if (music_current_time > total_time_seconds)
+                        if ((int)music_current_time > total_time_seconds && IsXFi)
                         {
                             break;
                         }
 
-                        information_text = ("Música atual: " + (file_number + 1)) + Environment.NewLine + ("Posição: " + music_current_time + "s/" + total_time_seconds + "s") + Environment.NewLine + ("Volume: " + (int)(double_volume * 100) + "%") + Environment.NewLine + ("Velocidade: " + int_playback_speed * 10 + "%");
+                        information_text = ("Música atual: " + (file_number + 1)) + Environment.NewLine + ("Posição: " + (int)music_current_time + "s/" + total_time_seconds + "s") + Environment.NewLine + ("Volume: " + (int)(double_volume) + "%") + Environment.NewLine + ("Velocidade: " + (int)(playback_speed * 100) + "%");
 
                         if (xram_available)
                         {
@@ -505,8 +447,6 @@ namespace OpenAL_Music_Player
                     }
                     #endregion
 
-                    // Stopping Timer
-                    music_timer.Stop();
                     music_current_time = 0;
 
                     Trace.WriteLine("Stopping source");
@@ -788,8 +728,8 @@ namespace OpenAL_Music_Player
 
         private void AboutItem_Click(object sender, RoutedEventArgs e)
         {
-            //var about_window = new AboutWindow { Owner = this };
-            //about_window.ShowDialog();
+            var about_window = new AboutWindow { Owner = this };
+            about_window.ShowDialog();
         }
 
         private void playlistItem_MouseDoubleClick(object sender, RoutedEventArgs e)
@@ -821,11 +761,17 @@ namespace OpenAL_Music_Player
             }
         }
 
-        private void Slider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        private void Slider_VolumeChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
-            double_volume = e.NewValue / 100;
-            volume = 0.0031623f * (float)Math.Exp(double_volume * 5.757f);
+            double_volume = e.NewValue; // Linear volume scale
+            volume = 0.0031623f * (float)Math.Exp(double_volume / 100 * 5.757f); // Exp volume scale
             mudando_volume = true;
+        }
+
+        public void Slider_SpeedChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            playback_speed = (float)e.NewValue / 100;
+            mudando_velocidade = true;
         }
 
         private void UpdateCPUUsageText(string message)
@@ -877,11 +823,6 @@ namespace OpenAL_Music_Player
                     System.Windows.MessageBox.Show("Please restart to load the new device", "Restart required");
                 }
             }
-        }
-
-        public static void SetMusicCurrentTime(object source, ElapsedEventArgs e)
-        {
-            music_current_time++;
         }
 
         private void Window_Closing(object sender, EventArgs e)
@@ -1097,27 +1038,6 @@ namespace OpenAL_Music_Player
             }
         }
 
-        public static void mudar_velocidade(bool aumentou)
-        {
-            if (aumentou)
-            {
-                if (int_playback_speed < 20)
-                {
-                    int_playback_speed = int_playback_speed + 1;
-                    playback_speed = int_playback_speed / 10f;
-                }
-            }
-            else
-            {
-                if (int_playback_speed > 5)
-                {
-                    int_playback_speed = int_playback_speed - 1;
-                    playback_speed = int_playback_speed / 10f;
-                }
-            }
-            mudando_velocidade = true;
-        }
-
         public static int[] PitchCorrection(float rate)
         {
             float pitch_correction_cents_total = 1200 * (float)(Math.Log(1 / rate) / Math.Log(2));
@@ -1153,6 +1073,23 @@ namespace OpenAL_Music_Player
 
             int[] pitch_out = new int[] { pitch_correction_semitones, (int)Math.Round(pitch_correction_cents) };
             return pitch_out;
+        }
+
+        private void pitchShiftCheckbox_Checked(object sender, RoutedEventArgs e)
+        {
+            if (pitchShiftCheckbox.IsChecked.Value)
+            {
+                pitch_shift_enabled = true;
+            }
+            else
+            {
+                pitch_shift_enabled = false;
+            }
+        }
+
+        private void ThreadTimeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            update_time_ms = (int)e.NewValue;
         }
     }
 

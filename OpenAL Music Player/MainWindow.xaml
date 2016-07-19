@@ -14,9 +14,6 @@
                 <MenuItem Header="_Open folder..." Click="Open_Click"/>
                 <MenuItem Header="_Open playlist..." />
             </MenuItem>
-            <MenuItem Header="_Something?">
-                <MenuItem Header="_Hello"/>
-            </MenuItem>
             <MenuItem Header="_Help " >
                 <MenuItem Header="_About"  Click="AboutItem_Click"/>
             </MenuItem>
@@ -81,8 +78,8 @@
                     </Grid.ColumnDefinitions>
                     <TextBlock x:Name="infoText" Text="Test" Grid.Column="0"/>
                     <StackPanel Grid.Column="1">
-                        <TextBlock Text="Volume"/>
-                        <Slider Grid.Column="1" Value="100" ValueChanged="Slider_ValueChanged" Maximum="100" LargeChange="10" AutoToolTipPlacement="BottomRight" SmallChange="1"/>
+                        <TextBlock Text="Volume (%)"/>
+                        <Slider Grid.Column="1" Value="100" ValueChanged="Slider_VolumeChanged" Maximum="100" LargeChange="10" AutoToolTipPlacement="BottomRight" SmallChange="1"/>
                     </StackPanel>
                 </Grid>
                 <Grid Grid.Row="1">
@@ -97,10 +94,10 @@
                     <StackPanel Grid.Row="0" Grid.RowSpan="1" Grid.Column="0" Grid.ColumnSpan="1">
                         <Separator/>
                         <TextBlock Text="Effects"/>
-                        <CheckBox/>
+                        <CheckBox x:Name="effectsCheckbox" IsEnabled="True"/>
                         <Separator/>
                         <TextBlock Text="Type"/>
-                        <ComboBox>
+                        <ComboBox IsEnabled="False">
                             <ComboBoxItem>
                                 <TextBlock Text="Reverb"/>
                             </ComboBoxItem>
@@ -109,10 +106,18 @@
                             </ComboBoxItem>
                         </ComboBox>
                     </StackPanel>
-                    <TextBlock Text="Pitch? Speed?" Grid.Row="1" Grid.RowSpan="1" Grid.Column="0" Grid.ColumnSpan="1"/>
+                    <StackPanel Grid.Row="1" Grid.RowSpan="1" Grid.Column="0" Grid.ColumnSpan="1">
+                        <Separator/>
+                        <TextBlock Text="Pitch shifter (X-Fi only)"/>
+                        <CheckBox x:Name="pitchShiftCheckbox" IsEnabled="True" ToolTip="Only from speed of 50% to 200%. Mono sound." Checked="pitchShiftCheckbox_Checked"/>
+                        <Separator/>
+                    </StackPanel>
+
                     <StackPanel Grid.Column="1" Grid.Row="1">
-                        <TextBlock Text="Speed"/>
-                        <Slider x:Name="SpeedSlider" AutoToolTipPlacement="BottomRight" Minimum="-50" Maximum="50" LargeChange="10" SmallChange="1"/>
+                        <TextBlock Text="Speed (%)"/>
+                        <Slider x:Name="SpeedSlider" AutoToolTipPlacement="BottomRight" Maximum="200" Value="100" ValueChanged="Slider_SpeedChanged" Minimum="0.01"/>
+                        <TextBlock Text="Thread update time (ms)"/>
+                        <Slider x:Name="ThreadTimeSlider" AutoToolTipPlacement="BottomRight" Maximum="1000" Value="150" Minimum="25" SmallChange="1" ToolTip="Default = 150 ms" LargeChange="100" ValueChanged="ThreadTimeSlider_ValueChanged"/>
                     </StackPanel>
                 </Grid>
             </Grid>
