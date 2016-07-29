@@ -311,18 +311,23 @@ namespace OpenAL_Music_Player
                     AL.Source(source, ALSourcef.Gain, volume);
 
                     // Correcting effect and filter to match last played file
-                    if (!pitch_shift_enabled || Math.Truncate(playback_speed * 100) == 100)
+                    if (Math.Truncate(playback_speed * 100) == 100)
                     {
                         if (IsXFi)
                         {
-                            // Disabling filter
-                            EFX.Filter(filter, EfxFilterf.LowpassGain, 1f);
-                            EFX.BindFilterToSource(source, filter);
-
-                            // Disabling effect
+                            // Reset effect
                             EFX.Effect(effect, EfxEffecti.PitchShifterCoarseTune, 0);
                             EFX.Effect(effect, EfxEffecti.PitchShifterFineTune, 0);
-                            EFX.AuxiliaryEffectSlot(slot, EfxAuxiliaryi.EffectslotEffect, (int)EfxEffectType.Null);
+
+                            if (!pitch_shift_enabled)
+                            {
+                                // Disable filter
+                                EFX.Filter(filter, EfxFilterf.LowpassGain, 1f);
+                                EFX.BindFilterToSource(source, filter);
+
+                                // Disable effect
+                                EFX.AuxiliaryEffectSlot(slot, EfxAuxiliaryi.EffectslotEffect, (int)EfxEffectType.Null);
+                            }
                         }
 
                         // Changing pitch
@@ -330,7 +335,7 @@ namespace OpenAL_Music_Player
                     }
                     else
                     {
-                        if (IsXFi)
+                        if (IsXFi && pitch_shift_enabled)
                         {
                             // Changing effect
                             EFX.Effect(effect, EfxEffecti.PitchShifterCoarseTune, pitch_correction[0]);
@@ -382,14 +387,19 @@ namespace OpenAL_Music_Player
                             {
                                 if (IsXFi)
                                 {
-                                    // Disabling filter
-                                    EFX.Filter(filter, EfxFilterf.LowpassGain, 1f);
-                                    EFX.BindFilterToSource(source, filter);
-
-                                    // Disabling effect
+                                    // Reset effect
                                     EFX.Effect(effect, EfxEffecti.PitchShifterCoarseTune, 0);
                                     EFX.Effect(effect, EfxEffecti.PitchShifterFineTune, 0);
-                                    EFX.AuxiliaryEffectSlot(slot, EfxAuxiliaryi.EffectslotEffect, (int)EfxEffectType.Null);
+
+                                    if (!pitch_shift_enabled)
+                                    {
+                                        // Disable filter
+                                        EFX.Filter(filter, EfxFilterf.LowpassGain, 1f);
+                                        EFX.BindFilterToSource(source, filter);
+
+                                        // Disable effect
+                                        EFX.AuxiliaryEffectSlot(slot, EfxAuxiliaryi.EffectslotEffect, (int)EfxEffectType.Null);
+                                    }
                                 }
 
                                 // Changing pitch
@@ -397,17 +407,29 @@ namespace OpenAL_Music_Player
                             }
                             else
                             {
-                                if (IsXFi && pitch_shift_enabled)
+                                if (IsXFi)
                                 {
-                                    // Changing effect
-                                    pitch_correction = PitchCorrection(playback_speed);
-                                    EFX.Effect(effect, EfxEffecti.PitchShifterCoarseTune, pitch_correction[0]);
-                                    EFX.Effect(effect, EfxEffecti.PitchShifterFineTune, pitch_correction[1]);
-                                    EFX.AuxiliaryEffectSlot(slot, EfxAuxiliaryi.EffectslotEffect, effect);
+                                    if (pitch_shift_enabled)
+                                    {
+                                        // Changing effect
+                                        pitch_correction = PitchCorrection(playback_speed);
+                                        EFX.Effect(effect, EfxEffecti.PitchShifterCoarseTune, pitch_correction[0]);
+                                        EFX.Effect(effect, EfxEffecti.PitchShifterFineTune, pitch_correction[1]);
+                                        EFX.AuxiliaryEffectSlot(slot, EfxAuxiliaryi.EffectslotEffect, effect);
 
-                                    // Changing filter
-                                    EFX.Filter(filter, EfxFilterf.LowpassGain, 0f); // To disable direct sound and leave only the effect
-                                    EFX.BindFilterToSource(source, filter);
+                                        // Changing filter
+                                        EFX.Filter(filter, EfxFilterf.LowpassGain, 0f); // To disable direct sound and leave only the effect
+                                        EFX.BindFilterToSource(source, filter);
+                                    }
+                                    else
+                                    {
+                                        // Disable filter
+                                        EFX.Filter(filter, EfxFilterf.LowpassGain, 1f);
+                                        EFX.BindFilterToSource(source, filter);
+
+                                        // Disable effect
+                                        EFX.AuxiliaryEffectSlot(slot, EfxAuxiliaryi.EffectslotEffect, (int)EfxEffectType.Null);
+                                    }
                                 }
 
                                 // Change source speed
@@ -1080,11 +1102,44 @@ namespace OpenAL_Music_Player
             if (pitchShiftCheckbox.IsChecked.Value)
             {
                 pitch_shift_enabled = true;
+                mudando_velocidade = true;
             }
             else
             {
                 pitch_shift_enabled = false;
+                mudando_velocidade = true;
             }
+        }
+
+        private int SetEffect(EffectsExtension EFX, int source, int slot, int effect, bool filtered, int filter)
+        {
+            // Filtering
+            if (filtered)
+            {
+                EFX.Filter(filter, EfxFilterf.LowpassGain, 0f); // Allow only the effect to play
+                EFX.BindFilterToSource(source, filter);
+            }
+            else
+            {
+                EFX.Filter(filter, EfxFilterf.LowpassGain, 1f);
+                EFX.BindFilterToSource(source, filter);
+            }
+
+            EFX.AuxiliaryEffectSlot(slot, EfxAuxiliaryi.EffectslotEffect, effect);
+
+            return 0;
+        }
+
+        private int RemoveEffect(EffectsExtension EFX, int source, int slot, int effect, int filter)
+        {
+            EFX.Filter(filter, EfxFilterf.LowpassGain, 1f);
+            EFX.BindFilterToSource(source, filter);
+
+            EFX.Effect(effect, EfxEffecti.PitchShifterCoarseTune, 0);
+            EFX.Effect(effect, EfxEffecti.PitchShifterFineTune, 0);
+            EFX.AuxiliaryEffectSlot(slot, EfxAuxiliaryi.EffectslotEffect, (int)EfxEffectType.Null);
+
+            return 0;
         }
 
         private void ThreadTimeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
