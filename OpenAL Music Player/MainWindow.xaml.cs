@@ -60,18 +60,6 @@ namespace OpenAL_Music_Player
         private static PerformanceCounter theCPUCounter = new PerformanceCounter("Process", "% Processor Time", Process.GetCurrentProcess().ProcessName);
         private static int CPU_logic_processors = Environment.ProcessorCount;
 
-        // OpenGL
-        double pos_x = 0;
-        double pos_y = 0;
-        double pos_z = 0;
-        double rotation_degree = 0;
-
-        // Multisource positioning OAL -> OGL communication variables
-        Vector3 red_position = new Vector3(0, 0, 0);
-        Vector3 blue_position = new Vector3(0, 0, 0);
-        Vector3 green_position = new Vector3(0, 0, 0);
-        Vector3 pink_position = new Vector3(0, 0, 0);
-
         // Variable used when verifying if user closed the window (to clean up) 
         public byte p = 0;
         public byte c = 0;

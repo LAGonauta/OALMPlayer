@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:OpenAL_Music_Player"
         mc:Ignorable="d"
-        Title="OpenAL Music Player" Height="500" Width="640" MinWidth="640" MinHeight="500"
+        Title="OpenAL Music Player" Height="500" Width="640" MinWidth="640" MinHeight="500" MaxHeight="500" MaxWidth="640"
         Closing="Window_Closing">
 
     <Grid>
@@ -65,7 +65,7 @@
                 </ListBox>
             </Border>
         </GroupBox>
-        <GroupBox Header="Something Display" HorizontalAlignment="Left" Margin="327,91,0,0" VerticalAlignment="Top" Height="368" Width="295">
+        <GroupBox Header="Details" HorizontalAlignment="Left" Margin="327,91,0,0" VerticalAlignment="Top" Height="368" Width="295">
             <Grid Margin="0,0,-7,0" RenderTransformOrigin="-0.52,-0.056">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="*"/>
@@ -76,10 +76,23 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock x:Name="infoText" Text="Test" Grid.Column="0"/>
+                    <TextBlock x:Name="infoText" Text="" Grid.Column="0"/>
                     <StackPanel Grid.Column="1">
                         <TextBlock Text="Volume (%)"/>
                         <Slider Grid.Column="1" Value="100" ValueChanged="Slider_VolumeChanged" Maximum="100" LargeChange="10" AutoToolTipPlacement="BottomRight" SmallChange="1"/>
+                        <Separator/>
+                        <TextBlock Text="Repeat"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <RadioButton x:Name="radioRepeatNone" Grid.Column="0" Content="No" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                            <RadioButton x:Name="radioRepeatSong" Grid.Column="1" Content="Song" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                            <RadioButton x:Name="radioRepeatAll" Grid.Column="2" Content="All" HorizontalAlignment="Left" VerticalAlignment="Center" IsChecked="True"/>
+                        </Grid>
+                        <Separator/>
                     </StackPanel>
                 </Grid>
                 <Grid Grid.Row="1">
@@ -114,10 +127,13 @@
                     </StackPanel>
 
                     <StackPanel Grid.Column="1" Grid.Row="1">
+                        <Separator/>
                         <TextBlock Text="Speed (%)"/>
                         <Slider x:Name="SpeedSlider" AutoToolTipPlacement="BottomRight" Maximum="200" Value="100" ValueChanged="Slider_SpeedChanged" Minimum="0.01" SmallChange="1" LargeChange="10"/>
+                        <Separator/>
                         <TextBlock Text="Thread update time (ms)"/>
                         <Slider x:Name="ThreadTimeSlider" AutoToolTipPlacement="BottomRight" Maximum="1000" Value="150" Minimum="25" SmallChange="1" ToolTip="Default = 150 ms" LargeChange="100" ValueChanged="ThreadTimeSlider_ValueChanged"/>
+                        <Separator/>
                     </StackPanel>
                 </Grid>
             </Grid>
