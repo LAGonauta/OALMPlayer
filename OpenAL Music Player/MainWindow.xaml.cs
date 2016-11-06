@@ -2,7 +2,6 @@
 using NAudio.Flac;
 using NAudio.WindowsMediaFormat;
 using NAudio.Vorbis;
-using OpenTK;
 using OpenTK.Audio;
 using OpenTK.Audio.OpenAL;
 using System;
@@ -518,102 +517,6 @@ namespace OpenAL_Music_Player
         }
         #endregion
 
-        // Math functions
-        public Vector3 LineCoeficients(Vector3 end_coordenate, Vector3 start_coordenate) //3D vector
-        {
-            Vector3 path_line_vector;
-
-            path_line_vector.X = end_coordenate.X - start_coordenate.Y;
-            path_line_vector.Y = end_coordenate.Y - start_coordenate.Y;
-            path_line_vector.Z = end_coordenate.Z - start_coordenate.Z;
-
-            return path_line_vector;
-        }
-
-        public Vector3 GetVelocityComponents(Vector3 start_position, Vector3 end_position, float current_speed)
-        {
-            float dx, dy, dz, d;
-            Vector3 velocity_vector;
-
-            // Decomposing movement
-            dx = end_position.X - start_position.X;
-            dy = end_position.Y - start_position.Y;
-            dz = end_position.Z - start_position.Z;
-
-            // Total movement
-            d = (float)Math.Sqrt(dx * dx + dy * dy + dz * dz);
-
-            // Velocity vectors
-
-            if (d > 0)
-            {
-                velocity_vector.X = dx / d * current_speed;
-                velocity_vector.Y = dy / d * current_speed;
-                velocity_vector.Z = dz / d * current_speed;
-            }
-            else
-            {
-                velocity_vector.X = 0;
-                velocity_vector.Y = 0;
-                velocity_vector.Z = 0;
-            }
-
-            return velocity_vector;
-        }
-
-        // Code from Creative's Effects Extension guide
-        // Real Pan vector is the pan calculated here times the magnitude (real_pan = pan * mag)
-        public Vector3 GetEAXReverbPan(Vector3 aperture_first_coordinate, Vector3 aperture_second_coordinate, Vector3 list_orientation, Vector3 list_position) // First and second coordinate from the reverb or reflection aperture, and the listener orientation and position
-        {
-            Vector3 PanVector, list_to_aperture, ApertureMidPoint;
-            double angle;
-
-            ApertureMidPoint = new Vector3((aperture_first_coordinate.X + aperture_second_coordinate.X) / 2, (aperture_first_coordinate.Y + aperture_second_coordinate.Y) / 2, (aperture_first_coordinate.Z + aperture_second_coordinate.Z) / 2);
-
-            // First we need to translate the aperture coordinates to the "user-relative" position
-            list_orientation.Normalize();
-            angle = Math.Acos(list_orientation.Z);
-
-            if (list_orientation.X < 0)
-            {
-                angle = -angle;
-            }
-
-            list_to_aperture = LineCoeficients(ApertureMidPoint, list_position); // Listener to Aperture midpoint vector
-
-            // Calculate pan vector
-            PanVector.X = (list_to_aperture.X * (float)Math.Cos(-angle)) + (list_to_aperture.Z * (float)Math.Sin(-angle));
-            PanVector.Y = 0; // TO DO: Not really, the sound may be coming from the ceiling ou the ground... How to fix this?
-            PanVector.Z = (list_to_aperture.X * -(float)Math.Sin(-angle)) + (list_to_aperture.Z * (float)Math.Cos(-angle));
-
-            // Normalize it
-            PanVector.Normalize();
-
-            return PanVector; // This seems to be right-handed coordenates
-        }
-
-        public float GetEAXReverbMag(Vector3 aperture_first_coordinate, Vector3 aperture_second_coordinate, Vector3 list_position)
-        {
-            Vector3 first_vector, second_vector;
-            double angle;
-            float magnitude;
-
-            // Calculate vectors to aperture extremities
-            first_vector = LineCoeficients(aperture_first_coordinate, list_position);
-            second_vector = LineCoeficients(aperture_second_coordinate, list_position);
-
-            // Normalize them
-            first_vector.Normalize();
-            second_vector.Normalize();
-
-            // Calculate angle in rad
-            angle = Math.Acos((first_vector.X * second_vector.X) + (first_vector.Y * second_vector.Y) + (first_vector.Z * second_vector.Z));
-
-            magnitude = (float)((2 * Math.Sin(angle / 2)) / angle);
-
-            return magnitude;
-        }
-
         #region GUI stuff
         // CPU usage
         private void UpdateCpuUsagePercent()
@@ -842,59 +745,10 @@ namespace OpenAL_Music_Player
             is_playing = false;
             change_file = true;
         }
-
         #endregion
 
         // Loads a wave/riff audio file using NAudio.
-        public static byte[] LoadMediaFoundation(string filepath, out int channels, out int bits, out int rate, out System.TimeSpan totaltime)
-        {
-            if (filepath == null)
-                throw new ArgumentNullException("filepath");
-
-            using (MediaFoundationReader reader = new MediaFoundationReader(filepath))
-            {
-                int num_channels = reader.WaveFormat.Channels;
-                int sample_rate = reader.WaveFormat.SampleRate;
-                int bits_per_sample = reader.WaveFormat.BitsPerSample;
-                totaltime = reader.TotalTime;
-
-                channels = num_channels;
-                bits = bits_per_sample;
-                rate = sample_rate;
-
-                // Byte array
-                byte[] buffer = new byte[reader.Length];
-                reader.Read(buffer, 0, buffer.Length);
-                reader.Dispose();
-
-                return buffer;
-            }
-        }
-
-        public static byte[] LoadMP3Path(string filepath, out int channels, out int bits, out int rate, out System.TimeSpan totaltime)
-        {
-            if (filepath == null)
-                throw new ArgumentNullException("filepath");
-
-            using (Mp3FileReader reader = new Mp3FileReader(filepath))
-            {
-
-                int num_channels = reader.Mp3WaveFormat.Channels;
-                int sample_rate = reader.Mp3WaveFormat.SampleRate;
-                int bits_per_sample = reader.Mp3WaveFormat.BitsPerSample;
-                totaltime = reader.TotalTime;
-
-                channels = num_channels;
-                bits = bits_per_sample;
-                rate = sample_rate;
-
-                byte[] buffer = new byte[reader.Length];
-                int read = reader.Read(buffer, 0, buffer.Length);
-
-                return buffer;
-            }
-        }
-
+        // Decode from memory
         public static byte[] LoadWave(Stream stream, out int channels, out int bits, out int rate, out System.TimeSpan totaltime)
         {
             if (stream == null)
@@ -968,29 +822,6 @@ namespace OpenAL_Music_Player
             }
         }
 
-        public static byte[] LoadWMA(string filepath, out int channels, out int bits, out int rate, out System.TimeSpan totaltime)
-        {
-            if (filepath == null)
-                throw new ArgumentNullException("filepath");
-
-            using (WMAFileReader reader = new WMAFileReader(filepath))
-            {
-                int num_channels = reader.WaveFormat.Channels;
-                int sample_rate = reader.WaveFormat.SampleRate;
-                int bits_per_sample = reader.WaveFormat.BitsPerSample;
-                totaltime = reader.TotalTime;
-
-                channels = num_channels;
-                bits = bits_per_sample;
-                rate = sample_rate;
-
-                byte[] buffer = new byte[reader.Length];
-                reader.Read(buffer, 0, buffer.Length);
-
-                return buffer;
-            }
-        }
-
         public static byte[] LoadVorbis(Stream stream, out int channels, out int bits, out int rate, out System.TimeSpan totaltime)
         {
             if (stream == null)
@@ -1029,6 +860,79 @@ namespace OpenAL_Music_Player
                 }
 
                 return sampleBufferShort.SelectMany(x => BitConverter.GetBytes(x)).ToArray();
+            }
+        }
+
+        // Decode from path
+        public static byte[] LoadMediaFoundation(string filepath, out int channels, out int bits, out int rate, out System.TimeSpan totaltime)
+        {
+            if (filepath == null)
+                throw new ArgumentNullException("filepath");
+
+            using (MediaFoundationReader reader = new MediaFoundationReader(filepath))
+            {
+                int num_channels = reader.WaveFormat.Channels;
+                int sample_rate = reader.WaveFormat.SampleRate;
+                int bits_per_sample = reader.WaveFormat.BitsPerSample;
+                totaltime = reader.TotalTime;
+
+                channels = num_channels;
+                bits = bits_per_sample;
+                rate = sample_rate;
+
+                // Byte array
+                byte[] buffer = new byte[reader.Length];
+                reader.Read(buffer, 0, buffer.Length);
+                reader.Dispose();
+
+                return buffer;
+            }
+        }
+
+        public static byte[] LoadMP3Path(string filepath, out int channels, out int bits, out int rate, out System.TimeSpan totaltime)
+        {
+            if (filepath == null)
+                throw new ArgumentNullException("filepath");
+
+            using (Mp3FileReader reader = new Mp3FileReader(filepath))
+            {
+
+                int num_channels = reader.Mp3WaveFormat.Channels;
+                int sample_rate = reader.Mp3WaveFormat.SampleRate;
+                int bits_per_sample = reader.Mp3WaveFormat.BitsPerSample;
+                totaltime = reader.TotalTime;
+
+                channels = num_channels;
+                bits = bits_per_sample;
+                rate = sample_rate;
+
+                byte[] buffer = new byte[reader.Length];
+                int read = reader.Read(buffer, 0, buffer.Length);
+
+                return buffer;
+            }
+        }
+
+        public static byte[] LoadWMA(string filepath, out int channels, out int bits, out int rate, out System.TimeSpan totaltime)
+        {
+            if (filepath == null)
+                throw new ArgumentNullException("filepath");
+
+            using (WMAFileReader reader = new WMAFileReader(filepath))
+            {
+                int num_channels = reader.WaveFormat.Channels;
+                int sample_rate = reader.WaveFormat.SampleRate;
+                int bits_per_sample = reader.WaveFormat.BitsPerSample;
+                totaltime = reader.TotalTime;
+
+                channels = num_channels;
+                bits = bits_per_sample;
+                rate = sample_rate;
+
+                byte[] buffer = new byte[reader.Length];
+                reader.Read(buffer, 0, buffer.Length);
+
+                return buffer;
             }
         }
 
