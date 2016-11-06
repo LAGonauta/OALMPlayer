@@ -142,8 +142,8 @@ namespace OpenAL_Music_Player
 
             // Setting up OpenAL stuff
             Trace.WriteLine("Setting up OpenAL playback");
-            //AudioContext ac = new AudioContext(last_selected_device, 0, 0, false, true, AudioContext.MaxAuxiliarySends.Four);
-            AudioContext ac = new AudioContext(last_selected_device, 48000);
+            AudioContext ac = new AudioContext(last_selected_device, 48000, 0, false, true, AudioContext.MaxAuxiliarySends.One);
+            //AudioContext ac = new AudioContext(last_selected_device, 48000);
             XRamExtension XRam = new XRamExtension();
 
             if (AL.Get(ALGetString.Renderer) == "SB X-Fi Audio [0001]")
@@ -1018,7 +1018,7 @@ namespace OpenAL_Music_Player
 
                 for (uint i = 0; i < read / 4; ++i)
                 {
-                    waveBuffer.FloatBuffer[i] = waveBuffer.FloatBuffer[i] * (1 << 16);
+                    waveBuffer.FloatBuffer[i] = waveBuffer.FloatBuffer[i] * (1 << 15);
 
                     if (waveBuffer.FloatBuffer[i] > 32767)
                         sampleBufferShort[i] = 32767;
@@ -1028,13 +1028,7 @@ namespace OpenAL_Music_Player
                         sampleBufferShort[i] = (short)(waveBuffer.FloatBuffer[i]);
                 }
 
-                for (uint i = 0, z = 0; i < read / 4; ++i, z += 2)
-                {
-                    buffer[z] = (byte)sampleBufferShort[i];
-                    buffer[z + 1] = (byte)(sampleBufferShort[i] >> 8);
-                }
-
-                return buffer;
+                return sampleBufferShort.SelectMany(x => BitConverter.GetBytes(x)).ToArray();
             }
         }
 

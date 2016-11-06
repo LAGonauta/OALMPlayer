@@ -8,7 +8,7 @@
         Title="About OpenAL Music Player" Height="250" Width="500" MaxWidth="500" MaxHeight="250" MinWidth="500" MinHeight="250" ShowInTaskbar="False" >
 
     <Grid>
-        <Grid Height="150" Width="150" Margin="-61,-61,403,130" RenderTransformOrigin="0.5,0.5">
+        <Grid Margin="-100,-97,247,-15" RenderTransformOrigin="0.5,0.5">
             <Grid.RenderTransform>
                 <TransformGroup>
                     <ScaleTransform ScaleX="0.6" ScaleY="0.6"/>
