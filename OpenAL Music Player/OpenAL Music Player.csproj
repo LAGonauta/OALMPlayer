@@ -9,7 +9,7 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>OpenAL_Music_Player</RootNamespace>
     <AssemblyName>OpenAL Music Player</AssemblyName>
-    <TargetFrameworkVersion>v4.6</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <ProjectTypeGuids>{60dc8134-eba5-43b8-bcc9-bb4bc16c2548};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
     <WarningLevel>4</WarningLevel>
@@ -25,6 +25,7 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -56,12 +57,12 @@
       <HintPath>..\packages\NAudio.Wma.1.0.1\lib\net35\NAudio.WindowsMediaFormat.dll</HintPath>
       <Private>True</Private>
     </Reference>
-    <Reference Include="NVorbis, Version=0.8.4.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\NVorbis.0.8.4.0\lib\NVorbis.dll</HintPath>
+    <Reference Include="NVorbis, Version=0.8.5.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\NVorbis.0.8.5.0\lib\NVorbis.dll</HintPath>
       <Private>True</Private>
     </Reference>
-    <Reference Include="OpenTK, Version=1.1.0.0, Culture=neutral, PublicKeyToken=bad199fe84eb3df4, processorArchitecture=MSIL">
-      <HintPath>..\packages\OpenTKWithOpenAL.1.1.1589.5942\lib\NET40\OpenTK.dll</HintPath>
+    <Reference Include="OpenTK, Version=2.0.0.0, Culture=neutral, PublicKeyToken=bad199fe84eb3df4, processorArchitecture=MSIL">
+      <HintPath>..\packages\OpenTK.2.0.0\lib\net20\OpenTK.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="System" />
@@ -123,6 +124,7 @@
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
     </EmbeddedResource>
+    <None Include="OpenTK.dll.config" />
     <None Include="packages.config" />
     <None Include="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>
@@ -141,7 +143,7 @@
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
     <PostBuildEvent>
-xcopy /s /y "$(SolutionDir)packages\OpenTKWithOpenAL.1.1.1589.5942\NativeBinaries\x86\*.*" "$(TargetDir)"</PostBuildEvent>
+    </PostBuildEvent>
   </PropertyGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.

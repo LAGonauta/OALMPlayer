@@ -22,12 +22,12 @@ namespace OpenAL_Music_Player
     /// </summary>
     public partial class MainWindow : Window
     {
-        #region Fields
+#region Fields
         public IList<string> AllPlaybackDevices;
         public string DefaultPlaybackDevice;
-        #endregion Fields
+#endregion Fields
 
-        #region Variables
+#region Variables
         // Files in the directory
         static string[] filePaths;// = Directory.GetFiles(@System.IO.Path.Combine("Music"));
 
@@ -63,7 +63,7 @@ namespace OpenAL_Music_Player
         public byte p = 0;
         public byte c = 0;
 
-        #endregion
+#endregion
         public class playlistItemsList
         {
             public string Title { get; set; }
@@ -79,12 +79,12 @@ namespace OpenAL_Music_Player
             if (File.Exists(config_file))
             {
                 last_selected_device = File.ReadAllText(config_file);
-                Trace.WriteLine("The device that will be used is " + last_selected_device);
+                DebugTrace("The device that will be used is " + last_selected_device);
             }
             else
             {
                 last_selected_device = null;
-                Trace.WriteLine("Using default device");
+                DebugTrace("Using default device");
             }
 
             // Starting audio thread
@@ -108,7 +108,7 @@ namespace OpenAL_Music_Player
             }
         }
 
-        #region OpenAL Stuff
+#region OpenAL Stuff
         public static bool IsXFi = false;
         public static bool pause_change = false;
         public static bool paused = false;
@@ -133,14 +133,15 @@ namespace OpenAL_Music_Player
             oal_error = AL.GetError();
             if (oal_error != ALError.NoError)
             {
-                Trace.WriteLine("Error starting oal error (yeah)" + oal_error);
+                DebugTrace("Error starting oal error (yeah)" + oal_error);
             }
 
             AllPlaybackDevices = AudioContext.AvailableDevices;
             DeviceChoice.Dispatcher.Invoke(new UpdateDeviceListCallBack(this.UpdateDeviceList));
 
             // Setting up OpenAL stuff
-            Trace.WriteLine("Setting up OpenAL playback");
+            DebugTrace("Setting up OpenAL playback");
+
             AudioContext ac = new AudioContext(last_selected_device, 48000, 0, false, true, AudioContext.MaxAuxiliarySends.One);
             //AudioContext ac = new AudioContext(last_selected_device, 48000);
             XRamExtension XRam = new XRamExtension();
@@ -150,7 +151,7 @@ namespace OpenAL_Music_Player
                 IsXFi = true;
             }
 
-            Trace.WriteLine("Renderer: " + AL.Get(ALGetString.Renderer));
+            DebugTrace("Renderer: " + AL.Get(ALGetString.Renderer)); 
 
             // EFX
             var EFX = new EffectsExtension();
@@ -161,7 +162,7 @@ namespace OpenAL_Music_Player
             oal_error = AL.GetError();
             if (oal_error != ALError.NoError)
             {
-                Trace.WriteLine("Error generating effects: " + oal_error);
+                DebugTrace("Error generating effects: " + oal_error);
             }
 
             if (IsXFi)
@@ -172,12 +173,12 @@ namespace OpenAL_Music_Player
                 oal_error = AL.GetError();
                 if (oal_error != ALError.NoError)
                 {
-                    Trace.WriteLine("XRam not available: " + oal_error);
+                    DebugTrace("XRam not available: " + oal_error);
                 }
             }
 
             // Setting up buffers
-            Trace.WriteLine("Setting up buffers");
+            DebugTrace("Setting up buffers"); 
             int buffer = 0;
             int source = 0;
 
@@ -193,14 +194,14 @@ namespace OpenAL_Music_Player
                 oal_error = AL.GetError();
                 if (oal_error != ALError.NoError)
                 {
-                    Trace.WriteLine("Failed when generating effects: " + oal_error);
+                    DebugTrace("Failed when generating effects: " + oal_error);
                 }
             }
 
             // Default speed
             int[] pitch_correction = PitchCorrection(playback_speed);
 
-            #region Playback
+#region Playback
             while (playbackthread_enabled)
             {
                 Thread.Sleep(250);
@@ -208,26 +209,26 @@ namespace OpenAL_Music_Player
                 {
                     #region Buffer
                     // Generating sources
-                    Trace.WriteLine("Generating source");
+                    DebugTrace("Generating source"); 
                     source = AL.GenSource();
 
                     oal_error = AL.GetError();
                     if (oal_error != ALError.NoError)
                     {
-                        Trace.WriteLine("Failed to generate source: " + oal_error);
+                        DebugTrace("Failed to generate source: " + oal_error);
                     }
 
                     // Setting up buffers
-                    Trace.WriteLine("Setting up buffer");
+                    DebugTrace("Setting up buffer");
                     buffer = AL.GenBuffer();
                     oal_error = AL.GetError();
                     if (oal_error != ALError.NoError)
                     {
-                        Trace.WriteLine("Failed to generate buffer: " + oal_error);
+                        DebugTrace("Failed to generate buffer: " + oal_error);
                     }
 
                     TimeSpan total_time = ExtensionMethods.ToTimeSpan(0); // Some files never send stop commands for some reason, let's do it manually. (only needed on driver 2.40+)
-                    Trace.WriteLine("Carregando...");
+                    DebugTrace("Carregando...");
 
                     int channels, bits_per_sample, sample_rate;
                     byte[] sound_data; // Creating sound data array
@@ -260,7 +261,7 @@ namespace OpenAL_Music_Player
                     }
                     else
                     {
-                        Trace.WriteLine("No file to load.");
+                        DebugTrace("No file to load.");
                         break;
                     }
 
@@ -270,28 +271,28 @@ namespace OpenAL_Music_Player
                     oal_error = AL.GetError();
                     if (oal_error != ALError.NoError)
                     {
-                        Trace.WriteLine("Buffering error: " + oal_error);
+                        DebugTrace("Buffering error: " + oal_error);
                     }
 
                     sound_data = null;
                     AudioFile.Dispose();
-                    #endregion
+#endregion
 
-                    Trace.WriteLine("Setting source: ");
+                    DebugTrace("Setting source: ");
 
                     AL.Source(source, ALSourcei.Buffer, buffer);
 
                     oal_error = AL.GetError();
                     if (oal_error != ALError.NoError)
                     {
-                        Trace.WriteLine("Source binding error: " + oal_error);
+                        DebugTrace("Source binding error: " + oal_error);
                     }
 
                     if (IsXFi)
                     {
                         // Binding effects
                         EFX.BindSourceToAuxiliarySlot(source, slot, 0, 0);
-                        Trace.WriteLine("Binding effect");
+                        DebugTrace("Binding effect");
                     }
 
                     // Correcting gain to match last played file
@@ -343,13 +344,13 @@ namespace OpenAL_Music_Player
                     oal_error = AL.GetError();
                     if (oal_error != ALError.NoError)
                     {
-                        Trace.WriteLine("Unable to play source: " + oal_error);
+                        DebugTrace("Unable to play source: " + oal_error);
                         break;
                     }
 
                     decimal total_time_seconds = ExtensionMethods.ToDecimal(total_time);
 
-                    #region Playback
+#region Playback
                     while (AL.GetSourceState(source) == ALSourceState.Playing || AL.GetSourceState(source) == ALSourceState.Paused) // We want to wait until application exit
                     {
                         Thread.Sleep(update_time_ms);
@@ -454,18 +455,18 @@ namespace OpenAL_Music_Player
 
                         infoText.Dispatcher.Invoke(new UpdateinfoTextCallback(this.UpdateinfoText), new object[] { information_text });
                     }
-                    #endregion
+#endregion
 
                     music_current_time = 0;
 
-                    Trace.WriteLine("Stopping source");
+                    DebugTrace("Stopping source");
 
                     AL.SourceStop(source);
 
                     oal_error = AL.GetError();
                     if (oal_error != ALError.NoError)
                     {
-                        Trace.WriteLine("Unable to stop source: " + oal_error);
+                        DebugTrace("Unable to stop source: " + oal_error);
                         break;
                     }
 
@@ -475,7 +476,7 @@ namespace OpenAL_Music_Player
                     oal_error = AL.GetError();
                     if (oal_error != ALError.NoError)
                     {
-                        Trace.WriteLine("Unable to delete source: " + oal_error);
+                        DebugTrace("Unable to delete source: " + oal_error);
                     }
 
                     AL.DeleteBuffer(buffer);
@@ -483,7 +484,7 @@ namespace OpenAL_Music_Player
                     oal_error = AL.GetError();
                     if (oal_error != ALError.NoError)
                     {
-                        Trace.WriteLine("Unable to delete buffer: " + oal_error);
+                        DebugTrace("Unable to delete buffer: " + oal_error);
                     }
 
                     if (file_number == (filePaths.Length - 1) && !change_file)
@@ -502,7 +503,7 @@ namespace OpenAL_Music_Player
                     }
                 }
             }
-            #endregion
+#endregion
 
             EFX.DeleteAuxiliaryEffectSlot(slot);
             EFX.DeleteEffect(effect);
@@ -511,13 +512,13 @@ namespace OpenAL_Music_Player
             AL.DeleteBuffer(buffer);
             ac.Dispose(); // Cleaning context
 
-            Trace.WriteLine("Disposing context");
+            DebugTrace("Disposing context");
 
             return;
         }
-        #endregion
+#endregion
 
-        #region GUI stuff
+#region GUI stuff
         // CPU usage
         private void UpdateCpuUsagePercent()
         {
@@ -745,7 +746,7 @@ namespace OpenAL_Music_Player
             is_playing = false;
             change_file = true;
         }
-        #endregion
+#endregion
 
         // Loads a wave/riff audio file using NAudio.
         // Decode from memory
@@ -1031,6 +1032,13 @@ namespace OpenAL_Music_Player
         private void ThreadTimeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
             update_time_ms = (int)e.NewValue;
+        }
+
+        private void DebugTrace(string message)
+        {
+#if DEBUG
+            Trace.WriteLine(message); 
+#endif
         }
     }
 
