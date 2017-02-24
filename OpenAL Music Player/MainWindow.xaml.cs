@@ -1,7 +1,6 @@
-﻿using NAudio.Wave;
-using NAudio.Flac;
-using NAudio.WindowsMediaFormat;
-using NAudio.Vorbis;
+﻿using CSCore;
+using CSCore.Codecs;
+using NVorbis;
 using OpenTK.Audio;
 using OpenTK.Audio.OpenAL;
 using System;
@@ -14,6 +13,10 @@ using System.Windows;
 using System.Windows.Forms;
 using System.Windows.Controls;
 using System.Linq;
+
+// TODO:
+// Make it OO
+// Use state machine
 
 namespace OpenAL_Music_Player
 {
@@ -110,6 +113,7 @@ namespace OpenAL_Music_Player
 
 #region OpenAL Stuff
         public static bool IsXFi = false;
+        public static bool float_support = false;
         public static bool pause_change = false;
         public static bool paused = false;
         public static bool oalthread_enabled = true;
@@ -126,6 +130,9 @@ namespace OpenAL_Music_Player
 
         public void OpenALThread()
         {
+            //Register the new codec.
+            CodecFactory.Instance.Register("ogg-vorbis", new CodecFactoryEntry(s => new NVorbisSource(s).ToWaveSource(), ".ogg"));
+
             OpenTK.Audio.OpenAL.ALError oal_error;
             string information_text;
             float music_current_time = 0;
@@ -143,13 +150,13 @@ namespace OpenAL_Music_Player
             DebugTrace("Setting up OpenAL playback");
 
             AudioContext ac = new AudioContext(last_selected_device, 48000, 0, false, true, AudioContext.MaxAuxiliarySends.One);
-            //AudioContext ac = new AudioContext(last_selected_device, 48000);
             XRamExtension XRam = new XRamExtension();
 
-            if (AL.Get(ALGetString.Renderer) == "SB X-Fi Audio [0001]")
-            {
+            if (AL.Get(ALGetString.Renderer).IndexOf("X-Fi") != -1)
                 IsXFi = true;
-            }
+
+            if (AL.IsExtensionPresent("AL_EXT_float32"))
+                float_support = true;
 
             DebugTrace("Renderer: " + AL.Get(ALGetString.Renderer)); 
 
@@ -231,51 +238,52 @@ namespace OpenAL_Music_Player
                     DebugTrace("Carregando...");
 
                     int channels, bits_per_sample, sample_rate;
-                    byte[] sound_data; // Creating sound data array
 
-                    FileStream AudioFile;
                     TimeSpan total_time_temp;
 
-                    AudioFile = File.OpenRead(filePaths[file_number]);
+                    IWaveSource AudioFile;
 
-                    if (filePaths[file_number].EndsWith(".mp3", StringComparison.OrdinalIgnoreCase))
+                    try
                     {
-                        sound_data = LoadMP3(AudioFile, out channels, out bits_per_sample, out sample_rate, out total_time_temp);
-                        //sound_data = LoadMP3Path(filePaths[file_number], out channels, out bits_per_sample, out sample_rate, out total_time_temp);
+                        AudioFile = CodecFactory.Instance.GetCodec(filePaths[file_number]);
                     }
-                    else if (filePaths[file_number].EndsWith(".wav", StringComparison.OrdinalIgnoreCase))
-                    {
-                        sound_data = LoadWave(AudioFile, out channels, out bits_per_sample, out sample_rate, out total_time_temp);
-                    }
-                    else if (filePaths[file_number].EndsWith(".ogg", StringComparison.OrdinalIgnoreCase))
-                    {
-                        sound_data = LoadVorbis(AudioFile, out channels, out bits_per_sample, out sample_rate, out total_time_temp);
-                    }
-                    else if (filePaths[file_number].EndsWith(".wma", StringComparison.OrdinalIgnoreCase))
-                    {
-                        sound_data = LoadWMA(filePaths[file_number], out channels, out bits_per_sample, out sample_rate, out total_time_temp);
-                    }
-                    else if (filePaths[file_number].EndsWith(".flac", StringComparison.OrdinalIgnoreCase))
-                    {
-                        sound_data = LoadFLAC(AudioFile, out channels, out bits_per_sample, out sample_rate, out total_time_temp);
-                    }
-                    else
+                    catch (Exception)
                     {
                         DebugTrace("No file to load.");
                         break;
                     }
 
+                    channels = AudioFile.WaveFormat.Channels;
+                    bits_per_sample = AudioFile.WaveFormat.BitsPerSample;
+                    sample_rate = AudioFile.WaveFormat.SampleRate;
+                    total_time_temp = new TimeSpan(0, 0, (int)(AudioFile.Length * sizeof(byte) / AudioFile.WaveFormat.BytesPerSecond));
+
+                    byte[] sound_data = new byte[AudioFile.Length];
+                    AudioFile.Read(sound_data, 0, sound_data.Length);
+                    AudioFile.Dispose();
+
                     total_time = total_time_temp;
-                    AL.BufferData(buffer, GetSoundFormat(channels, bits_per_sample), sound_data, sound_data.Length, sample_rate);
+
+                    ALFormat sound_format;
+
+                    try
+                    {
+                        sound_format = GetSoundFormat(channels, bits_per_sample, float_support);
+                    }
+                    catch
+                    {
+                        DebugTrace("Invalid file format.");
+                        break;
+                    }
+
+                    AL.BufferData(buffer, sound_format, sound_data, sound_data.Length, sample_rate);
+                    sound_data = null;
 
                     oal_error = AL.GetError();
                     if (oal_error != ALError.NoError)
                     {
                         DebugTrace("Buffering error: " + oal_error);
                     }
-
-                    sound_data = null;
-                    AudioFile.Dispose();
 #endregion
 
                     DebugTrace("Setting source: ");
@@ -551,7 +559,7 @@ namespace OpenAL_Music_Player
                         stop_playback = true;
                     }
                     Thread.Sleep(250); // So we are sure that notthing bad happens...
-                    var allowedExtensions = new[] { ".mp3", ".wav", ".wma", ".ogg", ".flac" };
+                    var allowedExtensions = new[] { ".mp3", ".wav", ".wma", ".ogg", ".flac", ".mp4", ".m4a" };
                     filePaths = Directory.GetFiles(dlgOpen.SelectedPath).Where(file => allowedExtensions.Any(file.ToLower().EndsWith)).ToArray();
                     playListGen();
                 }
@@ -748,202 +756,122 @@ namespace OpenAL_Music_Player
         }
 #endregion
 
-        // Loads a wave/riff audio file using NAudio.
-        // Decode from memory
-        public static byte[] LoadWave(Stream stream, out int channels, out int bits, out int rate, out System.TimeSpan totaltime)
-        {
-            if (stream == null)
-                throw new ArgumentNullException("stream");
+        //public static byte[] LoadVorbis(Stream stream, out int channels, out int bits, out int rate, out System.TimeSpan totaltime)
+        //{
+        //    if (stream == null)
+        //        throw new ArgumentNullException("stream");
 
-            using (WaveFileReader reader = new WaveFileReader(stream))
-            {
-                int num_channels = reader.WaveFormat.Channels;
-                int sample_rate = reader.WaveFormat.SampleRate;
-                int bits_per_sample = reader.WaveFormat.BitsPerSample;
-                totaltime = reader.TotalTime;
+        //    using (VorbisWaveReader reader = new VorbisWaveReader(stream))
+        //    {
+        //        int num_channels = reader.WaveFormat.Channels;
+        //        int sample_rate = reader.WaveFormat.SampleRate;
+        //        int bits_per_sample = reader.WaveFormat.BitsPerSample;
+        //        totaltime = reader.TotalTime;
 
-                channels = num_channels;
-                bits = bits_per_sample;
-                rate = sample_rate;
+        //        channels = num_channels;
+        //        bits = bits_per_sample;
+        //        rate = sample_rate;
 
-                // Byte array
-                byte[] buffer = new byte[reader.Length];
-                reader.Read(buffer, 0, buffer.Length);
+        //        byte[] buffer = new byte[reader.Length];
+        //        reader.Read(buffer, 0, buffer.Length);
 
-                return buffer;
-            }
-        }
+        //        var waveBuffer = new WaveBuffer(buffer);
 
-        public static byte[] LoadMP3(Stream stream, out int channels, out int bits, out int rate, out System.TimeSpan totaltime)
-        {
-            if (stream == null)
-                throw new ArgumentNullException("stream");
+        //        // Convert to 16-bit
+        //        int read = waveBuffer.FloatBuffer.Length;
+        //        short[] sampleBufferShort = new short[waveBuffer.FloatBuffer.Length / 4];
 
-            using (Mp3FileReader reader = new Mp3FileReader(stream))
-            {
+        //        for (uint i = 0; i < read / 4; ++i)
+        //        {
+        //            waveBuffer.FloatBuffer[i] = waveBuffer.FloatBuffer[i] * (1 << 15);
 
-                int num_channels = reader.Mp3WaveFormat.Channels;
-                int sample_rate = reader.Mp3WaveFormat.SampleRate;
-                int bits_per_sample = reader.Mp3WaveFormat.BitsPerSample;
-                totaltime = reader.TotalTime;
+        //            if (waveBuffer.FloatBuffer[i] > 32767)
+        //                sampleBufferShort[i] = 32767;
+        //            else if (waveBuffer.FloatBuffer[i] < -32768)
+        //                sampleBufferShort[i] = -32768;
+        //            else
+        //                sampleBufferShort[i] = (short)(waveBuffer.FloatBuffer[i]);
+        //        }
 
-                channels = num_channels;
-                bits = bits_per_sample;
-                rate = sample_rate;
+        //        return sampleBufferShort.SelectMany(x => BitConverter.GetBytes(x)).ToArray();
+        //    }
+        //}
 
-                byte[] buffer = new byte[reader.Length];
-                reader.Read(buffer, 0, buffer.Length);
-                reader.Dispose();
-
-                return buffer;
-            }
-        }
-
-        public static byte[] LoadFLAC(Stream stream, out int channels, out int bits, out int rate, out System.TimeSpan totaltime)
-        {
-            if (stream == null)
-                throw new ArgumentNullException("stream");
-
-            using (FlacReader reader = new FlacReader(stream))
-            {
-                int num_channels = reader.WaveFormat.Channels;
-                int sample_rate = reader.WaveFormat.SampleRate;
-                int bits_per_sample = reader.WaveFormat.BitsPerSample;
-                totaltime = reader.TotalTime;
-
-                channels = num_channels;
-                bits = bits_per_sample;
-                rate = sample_rate;
-
-                byte[] buffer = new byte[reader.Length];
-                reader.Read(buffer, 0, buffer.Length);
-                reader.Dispose();
-
-                return buffer;
-            }
-        }
-
-        public static byte[] LoadVorbis(Stream stream, out int channels, out int bits, out int rate, out System.TimeSpan totaltime)
-        {
-            if (stream == null)
-                throw new ArgumentNullException("stream");
-
-            using (VorbisWaveReader reader = new VorbisWaveReader(stream))
-            {
-                int num_channels = reader.WaveFormat.Channels;
-                int sample_rate = reader.WaveFormat.SampleRate;
-                int bits_per_sample = reader.WaveFormat.BitsPerSample;
-                totaltime = reader.TotalTime;
-
-                channels = num_channels;
-                bits = bits_per_sample;
-                rate = sample_rate;
-
-                byte[] buffer = new byte[reader.Length];
-                reader.Read(buffer, 0, buffer.Length);
-
-                var waveBuffer = new WaveBuffer(buffer);
-
-                // Convert to 16-bit
-                int read = waveBuffer.FloatBuffer.Length;
-                short[] sampleBufferShort = new short[waveBuffer.FloatBuffer.Length / 4];
-
-                for (uint i = 0; i < read / 4; ++i)
-                {
-                    waveBuffer.FloatBuffer[i] = waveBuffer.FloatBuffer[i] * (1 << 15);
-
-                    if (waveBuffer.FloatBuffer[i] > 32767)
-                        sampleBufferShort[i] = 32767;
-                    else if (waveBuffer.FloatBuffer[i] < -32768)
-                        sampleBufferShort[i] = -32768;
-                    else
-                        sampleBufferShort[i] = (short)(waveBuffer.FloatBuffer[i]);
-                }
-
-                return sampleBufferShort.SelectMany(x => BitConverter.GetBytes(x)).ToArray();
-            }
-        }
-
-        // Decode from path
-        public static byte[] LoadMediaFoundation(string filepath, out int channels, out int bits, out int rate, out System.TimeSpan totaltime)
-        {
-            if (filepath == null)
-                throw new ArgumentNullException("filepath");
-
-            using (MediaFoundationReader reader = new MediaFoundationReader(filepath))
-            {
-                int num_channels = reader.WaveFormat.Channels;
-                int sample_rate = reader.WaveFormat.SampleRate;
-                int bits_per_sample = reader.WaveFormat.BitsPerSample;
-                totaltime = reader.TotalTime;
-
-                channels = num_channels;
-                bits = bits_per_sample;
-                rate = sample_rate;
-
-                // Byte array
-                byte[] buffer = new byte[reader.Length];
-                reader.Read(buffer, 0, buffer.Length);
-                reader.Dispose();
-
-                return buffer;
-            }
-        }
-
-        public static byte[] LoadMP3Path(string filepath, out int channels, out int bits, out int rate, out System.TimeSpan totaltime)
-        {
-            if (filepath == null)
-                throw new ArgumentNullException("filepath");
-
-            using (Mp3FileReader reader = new Mp3FileReader(filepath))
-            {
-
-                int num_channels = reader.Mp3WaveFormat.Channels;
-                int sample_rate = reader.Mp3WaveFormat.SampleRate;
-                int bits_per_sample = reader.Mp3WaveFormat.BitsPerSample;
-                totaltime = reader.TotalTime;
-
-                channels = num_channels;
-                bits = bits_per_sample;
-                rate = sample_rate;
-
-                byte[] buffer = new byte[reader.Length];
-                int read = reader.Read(buffer, 0, buffer.Length);
-
-                return buffer;
-            }
-        }
-
-        public static byte[] LoadWMA(string filepath, out int channels, out int bits, out int rate, out System.TimeSpan totaltime)
-        {
-            if (filepath == null)
-                throw new ArgumentNullException("filepath");
-
-            using (WMAFileReader reader = new WMAFileReader(filepath))
-            {
-                int num_channels = reader.WaveFormat.Channels;
-                int sample_rate = reader.WaveFormat.SampleRate;
-                int bits_per_sample = reader.WaveFormat.BitsPerSample;
-                totaltime = reader.TotalTime;
-
-                channels = num_channels;
-                bits = bits_per_sample;
-                rate = sample_rate;
-
-                byte[] buffer = new byte[reader.Length];
-                reader.Read(buffer, 0, buffer.Length);
-
-                return buffer;
-            }
-        }
-
-        public static ALFormat GetSoundFormat(int channels, int bits)
+        public static ALFormat GetSoundFormat(int channels, int bits, bool float_support)
         {
             switch (channels)
             {
-                case 1: return bits == 8 ? ALFormat.Mono8 : ALFormat.Mono16;
-                case 2: return bits == 8 ? ALFormat.Stereo8 : ALFormat.Stereo16;
-                default: throw new NotSupportedException("The specified sound format is not supported.");
+                case 1:
+                    {
+                        if (bits == 8)
+                        {
+                            return ALFormat.Mono8;
+                        }
+                        else if (bits == 16)
+                        {
+                            return ALFormat.Mono16;
+                        }
+                        else
+                        {
+                            if (float_support)
+                            {
+                                return ALFormat.MonoFloat32Ext;
+                            }
+                            else
+                            {
+                                throw new NotSupportedException("The specified sound format is not supported.");
+                                //return 0x1203;
+                            }
+                        }
+                    }
+                case 2:
+                    {
+                        if (bits == 8)
+                        {
+                            return ALFormat.Stereo8;
+                        }
+                        else if (bits == 16)
+                        {
+                            return ALFormat.Stereo16;
+                        }
+                        else
+                        {
+                            if (float_support)
+                            {
+                                return ALFormat.StereoFloat32Ext;
+                            }
+                            else
+                            {
+                                throw new NotSupportedException("The specified sound format is not supported.");
+                                //return 0x1203;
+                            }
+                        }
+                    }
+                case 6:
+                    {
+                        if (bits == 8)
+                        {
+                            return ALFormat.Multi51Chn8Ext;
+                        }
+                        else if (bits == 16)
+                        {
+                            return ALFormat.Multi51Chn16Ext;
+                        }
+                        else
+                        {
+                            if (float_support)
+                            {
+                                return ALFormat.Multi51Chn32Ext;
+                            }
+                            else
+                            {
+                                throw new NotSupportedException("The specified sound format is not supported.");
+                                //return 0x1203;
+                            }
+                        }
+                    }
+                default:
+                    throw new NotSupportedException("The specified sound format is not supported.");
             }
         }
 
@@ -1059,6 +987,75 @@ namespace OpenAL_Music_Player
             int time = Convert.ToInt32(value * 86400M);
             TimeSpan result = new TimeSpan(1, 0, 0, time, 0);
             return result;
+        }
+    }
+
+    // From https://github.com/filoe/cscore/blob/master/Samples/NVorbisIntegration/Program.cs
+    public sealed class NVorbisSource : ISampleSource
+    {
+        private readonly Stream _stream;
+        private readonly VorbisReader _vorbisReader;
+
+        private readonly WaveFormat _waveFormat;
+        private bool _disposed;
+
+        public NVorbisSource(Stream stream)
+        {
+            if (stream == null)
+                throw new ArgumentNullException("stream");
+            if (!stream.CanRead)
+                throw new ArgumentException("Stream is not readable.", "stream");
+            _stream = stream;
+            _vorbisReader = new VorbisReader(stream, false);
+            _waveFormat = new WaveFormat(_vorbisReader.SampleRate, 32, _vorbisReader.Channels, AudioEncoding.IeeeFloat);
+        }
+
+        public bool CanSeek
+        {
+            get { return _stream.CanSeek; }
+        }
+
+        public WaveFormat WaveFormat
+        {
+            get { return _waveFormat; }
+        }
+
+        //got fixed through workitem #17, thanks for reporting @rgodart.
+        public long Length
+        {
+            get { return CanSeek ? (long)(_vorbisReader.TotalTime.TotalSeconds * _waveFormat.SampleRate * _waveFormat.Channels) : 0; }
+        }
+
+        //got fixed through workitem #17, thanks for reporting @rgodart.
+        public long Position
+        {
+            get
+            {
+                return CanSeek ? (long)(_vorbisReader.DecodedTime.TotalSeconds * _vorbisReader.SampleRate * _vorbisReader.Channels) : 0;
+            }
+            set
+            {
+                if (!CanSeek)
+                    throw new InvalidOperationException("NVorbisSource is not seekable.");
+                if (value < 0 || value > Length)
+                    throw new ArgumentOutOfRangeException("value");
+
+                _vorbisReader.DecodedTime = TimeSpan.FromSeconds((double)value / _vorbisReader.SampleRate / _vorbisReader.Channels);
+            }
+        }
+
+        public int Read(float[] buffer, int offset, int count)
+        {
+            return _vorbisReader.ReadSamples(buffer, offset, count);
+        }
+
+        public void Dispose()
+        {
+            if (!_disposed)
+                _vorbisReader.Dispose();
+            else
+                throw new ObjectDisposedException("NVorbisSource");
+            _disposed = true;
         }
     }
 }
