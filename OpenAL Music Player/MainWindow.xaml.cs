@@ -1,5 +1,6 @@
 ﻿using CSCore;
 using CSCore.Codecs;
+using CSCore.Streams.SampleConverter;
 using NVorbis;
 using OpenTK.Audio;
 using OpenTK.Audio.OpenAL;
@@ -237,10 +238,6 @@ namespace OpenAL_Music_Player
                     TimeSpan total_time = ExtensionMethods.ToTimeSpan(0); // Some files never send stop commands for some reason, let's do it manually. (only needed on driver 2.40+)
                     DebugTrace("Carregando...");
 
-                    int channels, bits_per_sample, sample_rate;
-
-                    TimeSpan total_time_temp;
-
                     IWaveSource AudioFile;
 
                     try
@@ -253,22 +250,32 @@ namespace OpenAL_Music_Player
                         break;
                     }
 
-                    channels = AudioFile.WaveFormat.Channels;
-                    bits_per_sample = AudioFile.WaveFormat.BitsPerSample;
-                    sample_rate = AudioFile.WaveFormat.SampleRate;
-                    total_time_temp = new TimeSpan(0, 0, (int)(AudioFile.Length * sizeof(byte) / AudioFile.WaveFormat.BytesPerSecond));
 
-                    byte[] sound_data = new byte[AudioFile.Length];
-                    AudioFile.Read(sound_data, 0, sound_data.Length);
-                    AudioFile.Dispose();
+                    if (IsXFi && AudioFile.WaveFormat.WaveFormatTag == AudioEncoding.IeeeFloat)
+                    {
+                        if (AudioFile.WaveFormat.BitsPerSample == 32)
+                        {
+                            var toSample = AudioFile.ToSampleSource();
+                            AudioFile = new SampleToPcm32(toSample);
+                        }
+                        else if (AudioFile.WaveFormat.BitsPerSample == 16)
+                        {
+                            var toSample = AudioFile.ToSampleSource();
+                            AudioFile = new SampleToPcm16(toSample);
+                        }
+                        else
+                        {
+                            var toSample = AudioFile.ToSampleSource();
+                            AudioFile = new SampleToPcm8(toSample);
+                        }
+                    }
 
-                    total_time = total_time_temp;
+                    total_time = new TimeSpan(0, 0, (int)(AudioFile.Length * sizeof(byte) / AudioFile.WaveFormat.BytesPerSecond)); ;
 
                     ALFormat sound_format;
-
                     try
                     {
-                        sound_format = GetSoundFormat(channels, bits_per_sample, float_support);
+                        sound_format = GetSoundFormat(AudioFile.WaveFormat.Channels, AudioFile.WaveFormat.BitsPerSample, float_support);
                     }
                     catch
                     {
@@ -276,7 +283,11 @@ namespace OpenAL_Music_Player
                         break;
                     }
 
-                    AL.BufferData(buffer, sound_format, sound_data, sound_data.Length, sample_rate);
+                    byte[] sound_data = new byte[AudioFile.Length];
+                    AudioFile.Read(sound_data, 0, sound_data.Length);
+                    AudioFile.Dispose();
+
+                    AL.BufferData(buffer, sound_format, sound_data, sound_data.Length, AudioFile.WaveFormat.SampleRate);
                     sound_data = null;
 
                     oal_error = AL.GetError();
@@ -559,7 +570,7 @@ namespace OpenAL_Music_Player
                         stop_playback = true;
                     }
                     Thread.Sleep(250); // So we are sure that notthing bad happens...
-                    var allowedExtensions = new[] { ".mp3", ".wav", ".wma", ".ogg", ".flac", ".mp4", ".m4a" };
+                    var allowedExtensions = new[] { ".mp3", ".wav", ".wma", ".ogg", ".flac", ".mp4", ".m4a" , ".ac3" };
                     filePaths = Directory.GetFiles(dlgOpen.SelectedPath).Where(file => allowedExtensions.Any(file.ToLower().EndsWith)).ToArray();
                     playListGen();
                 }
@@ -842,8 +853,8 @@ namespace OpenAL_Music_Player
                             }
                             else
                             {
-                                throw new NotSupportedException("The specified sound format is not supported.");
-                                //return 0x1203;
+                                //throw new NotSupportedException("The specified sound format is not supported.");
+                                return (ALFormat)0x1203;
                             }
                         }
                     }
