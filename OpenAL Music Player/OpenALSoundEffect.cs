@@ -208,6 +208,7 @@ namespace OALEngine
             if (isValid)
             {
                 this.Stop();
+                alengine.Check();
                 alengine.DeleteBuffer(buffer);
                 isValid = false;
             }

@@ -19,6 +19,7 @@ namespace OpenAL_Music_Player
 
         // sound engine
         OpenALEngine alengine;
+        bool isXFi = false;
 
         // timer
         System.Threading.Timer timer;
@@ -152,6 +153,30 @@ namespace OpenAL_Music_Player
             }
             
         }
+
+        public bool IsXFi
+        {
+            get
+            {
+                return isXFi;
+            }
+        }
+
+        public float XRamFree
+        {
+            get
+            {
+                return alengine.GetXRamFree;
+            }
+        }
+
+        public float XRamTotal
+        {
+            get
+            {
+                return alengine.GetXRamSize;
+            }
+        }
         #endregion
 
         #region Constructor
@@ -161,6 +186,8 @@ namespace OpenAL_Music_Player
             currentState = PlayerState.Stopped;
             timerPeriod = 150;
             currentMusic = 0;
+            volumePercentage = 100;
+            pitch = 1f;
 
             var devices = AudioContext.AvailableDevices;
             alengine = new OpenALEngine(devices[0], true, AudioContext.MaxAuxiliarySends.One, true);
@@ -184,8 +211,9 @@ namespace OpenAL_Music_Player
             currentState = PlayerState.Stopped;
             timerPeriod = 150;
             currentMusic = 0;
+            volumePercentage = 100;
+            pitch = 1f;
 
-            var devices = AudioContext.AvailableDevices;
             alengine = new OpenALEngine(device, true, AudioContext.MaxAuxiliarySends.One, true);
 
             timer = new Timer(new TimerCallback(this.DetectChanges), null, timerPeriod, timerPeriod);
@@ -360,7 +388,7 @@ namespace OpenAL_Music_Player
                     {
                         if (music.IsPlaying)
                         {
-                            music.Stop();
+                            music.Dispose();
                         }
                     }
 
@@ -378,33 +406,30 @@ namespace OpenAL_Music_Player
                 case PlayerState.StopPlayback:
                     if (music != null)
                     {
-                        music.Stop();
+                        music.Dispose();
                     }
 
                     currentState = PlayerState.Stopped;
                     lastState = PlayerState.StopPlayback;
                     break;
-
+               
+                // no need to keep track of last state on those
                 case PlayerState.ChangingTimer:
-                    timer.Change(timerPeriod, timerPeriod);
+                    if (timer != null)
+                        timer.Change(timerPeriod, timerPeriod);
                     currentState = lastState;
-                    lastState = PlayerState.ChangingTimer;
                     break;
 
                 case PlayerState.ChangingVolume:
                     if (music != null)
-                    {
                         music.Gain = volume;
-                    }
                     currentState = lastState;
-                    lastState = PlayerState.ChangingVolume;
                     break;
 
                 case PlayerState.ChangingPitch:
                     if (music != null)
-                    {
                         music.Pitch = pitch;
-                    }
+                    currentState = lastState;
                     break;
             }
         }

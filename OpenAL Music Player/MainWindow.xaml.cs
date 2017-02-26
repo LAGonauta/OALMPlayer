@@ -112,6 +112,13 @@ namespace OpenAL_Music_Player
             CPUTimer.Interval = 2000;
             CPUTimer.Tick += new EventHandler(this.UpdateCPUUsage);
             CPUTimer.Start();
+
+            // Starting GUI information update timer
+            this.UpdateCPUUsage(null, null);
+            var InfoText = new System.Windows.Forms.Timer();
+            InfoText.Interval = 150;
+            InfoText.Tick += new EventHandler(this.UpdateInfoText);
+            InfoText.Start();
         }
 
         public void playListGen()
@@ -506,7 +513,10 @@ namespace OpenAL_Music_Player
                             break;
                         }
 
-                        information_text = ("Música atual: " + (file_number + 1)) + Environment.NewLine + ("Posição: " + (int)music_current_time + "s/" + total_time_seconds + "s") + Environment.NewLine + ("Volume: " + (int)(double_volume) + "%") + Environment.NewLine + ("Velocidade: " + (int)(playback_speed * 100) + "%");
+                        information_text = ("Música atual: " + (file_number + 1)) + Environment.NewLine +
+                            ("Posição: " + (int)music_current_time + "s/" + total_time_seconds + "s") + Environment.NewLine +
+                            ("Volume: " + (int)(double_volume) + "%") + Environment.NewLine +
+                            ("Velocidade: " + (int)(playback_speed * 100) + "%");
 
                         if (xram_available)
                         {
@@ -819,6 +829,25 @@ namespace OpenAL_Music_Player
         private void UpdateinfoText(string message)
         {
             infoText.Text = (message);
+        }
+
+        private void UpdateInfoText(object source, EventArgs e)
+        {
+            if (oalPlayer != null)
+            {
+                string message;
+                message = ("Música atual: " + (oalPlayer.CurrentMusic)) + Environment.NewLine +
+                    ("Posição: " + (int)oalPlayer.TrackCurrentTime + "s/" + (int)oalPlayer.TrackTotalTime + "s") + Environment.NewLine +
+                    ("Volume: " + (int)(oalPlayer.Volume) + "%") + Environment.NewLine +
+                    ("Velocidade: " + (int)(oalPlayer.Pitch * 100) + "%");
+
+                if (oalPlayer.IsXFi == false)
+                {
+                    message = message + Environment.NewLine + ("XRam livre: " + (oalPlayer.XRamFree / (1024.0 * 1024)).ToString("0.00") + "MB");
+                }
+
+                infoText.Text = (message); 
+            }
         }
 
         private void UpdateDeviceList()
