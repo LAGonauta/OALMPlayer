@@ -33,12 +33,15 @@ namespace OpenAL_Music_Player
 
 #region Variables
         // Files in the directory
-        static string[] filePaths;// = Directory.GetFiles(@System.IO.Path.Combine("Music"));
+        static string[] filePaths;
 
         // Generate playlist
         public ObservableCollection<playlistItemsList> items = new ObservableCollection<playlistItemsList>();
 
         public bool xram_available = false;
+
+        // change this to use new system
+        bool useObjectOrientedMethod = false;
 
         // File control
         public static int file_number = 0;
@@ -47,7 +50,6 @@ namespace OpenAL_Music_Player
         public delegate void UpdateTextCallback(string message);
         public delegate void UpdateDeviceListCallBack();
         public delegate void UpdateinfoTextCallback(string message);
-        public delegate void UpdateCPUUsageTextCallback(string message);
 
         // Device selection initialization
         string last_selected_device = "";
@@ -58,10 +60,11 @@ namespace OpenAL_Music_Player
         public static bool playbackthread_enabled = true;
         public static bool is_playing = false;
         public static int update_time_ms = 150;
+        OpenALPlayer oalPlayer;
 
         // CPU usage
-        private static PerformanceCounter theCPUCounter = new PerformanceCounter("Process", "% Processor Time", Process.GetCurrentProcess().ProcessName);
-        private static int CPU_logic_processors = Environment.ProcessorCount;
+        private PerformanceCounter theCPUCounter = new PerformanceCounter("Process", "% Processor Time", Process.GetCurrentProcess().ProcessName);
+        private int CPU_logic_processors = Environment.ProcessorCount;
 
         // Variable used when verifying if user closed the window (to clean up) 
         public byte p = 0;
@@ -92,11 +95,23 @@ namespace OpenAL_Music_Player
             }
 
             // Starting audio thread
-            Thread openal_thread = new Thread(new ThreadStart(OpenALThread));
+            Thread openal_thread;
+            if (useObjectOrientedMethod)
+            {
+                openal_thread = new Thread(new ThreadStart(OpenALThread2));
+            }
+            else
+            {
+                openal_thread = new Thread(new ThreadStart(OpenALThread));
+            }
             openal_thread.Start();
-                
-            // Starting CPU usage thread
-            new Thread(new ThreadStart(UpdateCpuUsagePercent)).Start();
+
+            // Starting CPU usage timer
+            this.UpdateCPUUsage(null, null);
+            var CPUTimer = new System.Windows.Forms.Timer();
+            CPUTimer.Interval = 2000;
+            CPUTimer.Tick += new EventHandler(this.UpdateCPUUsage);
+            CPUTimer.Start();
         }
 
         public void playListGen()
@@ -110,6 +125,17 @@ namespace OpenAL_Music_Player
             {
                 items.Add(new playlistItemsList() { Title = (i + 1 + ". " + Path.GetFileName(filePaths[i])) });
             }
+
+            if (useObjectOrientedMethod)
+            {
+                List<string> mList = new List<string>();
+
+                foreach (string element in filePaths)
+                    mList.Add(element);
+
+                oalPlayer.MusicList = mList;
+            }
+                
         }
 
 #region OpenAL Stuff
@@ -128,6 +154,14 @@ namespace OpenAL_Music_Player
         public static bool mudando_volume = false;
         public static bool effects_enabled = false;
         public static bool pitch_shift_enabled = false;
+
+        public void OpenALThread2()
+        {
+            AllPlaybackDevices = AudioContext.AvailableDevices;
+            DeviceChoice.Dispatcher.Invoke(new UpdateDeviceListCallBack(this.UpdateDeviceList));
+
+            oalPlayer = new OpenALPlayer(filePaths, last_selected_device);
+        }
 
         public void OpenALThread()
         {
@@ -253,24 +287,22 @@ namespace OpenAL_Music_Player
 
                     if (IsXFi && AudioFile.WaveFormat.WaveFormatTag == AudioEncoding.IeeeFloat)
                     {
+                        var toSample = AudioFile.ToSampleSource();
                         if (AudioFile.WaveFormat.BitsPerSample == 32)
                         {
-                            var toSample = AudioFile.ToSampleSource();
                             AudioFile = new SampleToPcm32(toSample);
                         }
                         else if (AudioFile.WaveFormat.BitsPerSample == 16)
                         {
-                            var toSample = AudioFile.ToSampleSource();
                             AudioFile = new SampleToPcm16(toSample);
                         }
                         else
                         {
-                            var toSample = AudioFile.ToSampleSource();
                             AudioFile = new SampleToPcm8(toSample);
                         }
                     }
 
-                    total_time = new TimeSpan(0, 0, (int)(AudioFile.Length * sizeof(byte) / AudioFile.WaveFormat.BytesPerSecond)); ;
+                    total_time = new TimeSpan(0, 0, (int)(AudioFile.Length * sizeof(byte) / AudioFile.WaveFormat.BytesPerSecond));
 
                     ALFormat sound_format;
                     try
@@ -284,7 +316,16 @@ namespace OpenAL_Music_Player
                     }
 
                     byte[] sound_data = new byte[AudioFile.Length];
-                    AudioFile.Read(sound_data, 0, sound_data.Length);
+                    try
+                    {
+                        AudioFile.Read(sound_data, 0, sound_data.Length);
+                    }
+                    catch
+                    {
+                        DebugTrace("Unable to read file.");
+                        break;
+                    }
+
                     AudioFile.Dispose();
 
                     AL.BufferData(buffer, sound_format, sound_data, sound_data.Length, AudioFile.WaveFormat.SampleRate);
@@ -538,23 +579,6 @@ namespace OpenAL_Music_Player
 #endregion
 
 #region GUI stuff
-        // CPU usage
-        private void UpdateCpuUsagePercent()
-        {
-            while (playbackthread_enabled)
-            {
-                c = 0;
-                while (c < 20 && playbackthread_enabled) // Check if is still enabled, or if the application was closed
-                {
-                    Thread.Sleep(100); // We want to sleep a total of 2000ms
-                    c++;
-                }
-
-                float total_cpu_usage = theCPUCounter.NextValue();
-                CPUUsagePercent.Dispatcher.Invoke(new UpdateCPUUsageTextCallback(this.UpdateCPUUsageText), new object[] { (total_cpu_usage / CPU_logic_processors).ToString("0.0") + "%" });
-            }
-        }
-
         private void Open_Click(object sender, RoutedEventArgs e)
         {
             using (FolderBrowserDialog dlgOpen = new FolderBrowserDialog())
@@ -583,31 +607,60 @@ namespace OpenAL_Music_Player
             {
                 if (filePaths.Length > 0)
                 {
-                    if (paused && is_playing)
+                    if (useObjectOrientedMethod)
                     {
-                        paused = false;
-                        pause_change = true;
-                    }
-                    else if (!is_playing)
-                    {
-                        is_playing = true;
+                        if (oalPlayer.Status == OpenALPlayer.PlayerState.Paused)
+                        {
+                            SoundPlayPause.Content = "Play";
+                            paused = false;
+                            if (useObjectOrientedMethod)
+                                oalPlayer.Unpause();
+                        }
+                        else
+                        {
+                            SoundPlayPause.Content = "Pause";
+                            paused = true;
+                            if (oalPlayer.Status == OpenALPlayer.PlayerState.Playing)
+                            {
+                                if (useObjectOrientedMethod)
+                                    oalPlayer.Pause(); 
+                            }
+                            else
+                            {
+                                oalPlayer.Play();
+                            }
+                        }
+
+                        playlistItems.SelectedIndex = oalPlayer.CurrentMusic - 1;
                     }
                     else
                     {
-                        paused = true;
-                        pause_change = true;
-                    }
+                        if (paused && is_playing)
+                        {
+                            paused = false;
+                            pause_change = true;
+                        }
+                        else if (!is_playing)
+                        {
+                            is_playing = true;
+                        }
+                        else
+                        {
+                            paused = true;
+                            pause_change = true;
+                        }
 
-                    if (paused)
-                    {
-                        SoundPlayPause.Content = "Play";
-                    }
-                    else
-                    {
-                        SoundPlayPause.Content = "Pause";
-                    }
+                        if (paused)
+                        {
+                            SoundPlayPause.Content = "Play";
+                        }
+                        else
+                        {
+                            SoundPlayPause.Content = "Pause";
+                        }
 
-                    playlistItems.SelectedIndex = file_number;
+                        playlistItems.SelectedIndex = file_number;
+                    }
                 } 
             }
         }
@@ -618,24 +671,39 @@ namespace OpenAL_Music_Player
             {
                 if (filePaths.Length > 0)
                 {
-                    file_number++;
+                    if (useObjectOrientedMethod)
+                    {
+                        oalPlayer.NextTrack();
+                        playlistItems.SelectedIndex = oalPlayer.CurrentMusic - 1;
+                    }
+                    else
+                    {
+                        file_number++;
 
-                    if (file_number == filePaths.Length) // When it reaches the end of the list.
-                        file_number = 0;
+                        if (file_number == filePaths.Length) // When it reaches the end of the list.
+                            file_number = 0;
 
-                    playlistItems.SelectedIndex = file_number;
+                        playlistItems.SelectedIndex = file_number;
 
-                    change_file = true;
+                        change_file = true;
+                    }
                 }
             }
         }
 
         private void Stop_Click(object sender, RoutedEventArgs e)
         {
-            file_number = 0;
-            is_playing = false;
-            stop_playback = true;
-            change_file = true;
+            if (useObjectOrientedMethod)
+            {
+                oalPlayer.Stop();
+            }
+            else
+            {
+                file_number = 0;
+                is_playing = false;
+                stop_playback = true;
+                change_file = true;
+            }
         }
 
         private void Back_Click(object sender, RoutedEventArgs e)
@@ -644,17 +712,25 @@ namespace OpenAL_Music_Player
             {
                 if (filePaths.Length > 0)
                 {
-                    if (file_number > 0)
+                    if (useObjectOrientedMethod)
                     {
-                        file_number--;
+                        oalPlayer.PreviousTrack();
+                        playlistItems.SelectedIndex = oalPlayer.CurrentMusic - 1;
                     }
                     else
                     {
-                        file_number = filePaths.Length - 1;
-                    }
+                        if (file_number > 0)
+                        {
+                            file_number--;
+                        }
+                        else
+                        {
+                            file_number = filePaths.Length - 1;
+                        }
 
-                    playlistItems.SelectedIndex = file_number;
-                    change_file = true;
+                        playlistItems.SelectedIndex = file_number;
+                        change_file = true;
+                    }
                 }
             }
         }
@@ -667,49 +743,77 @@ namespace OpenAL_Music_Player
 
         private void playlistItem_MouseDoubleClick(object sender, RoutedEventArgs e)
         {
-            if (file_number != playlistItems.SelectedIndex)
+            if (useObjectOrientedMethod)
             {
-                file_number = playlistItems.SelectedIndex;
-                change_file = true;
-
-                if (!is_playing)
+                if (playlistItems.SelectedIndex != -1)
                 {
-                    is_playing = true;
-                }
-
-                if (paused)
-                {
-                    SoundPlayPause.Content = "Pause";
-                    paused = false;
-                    pause_change = true;
+                    // is SelectedIndex zero indexed? Yes.
+                    oalPlayer.CurrentMusic = playlistItems.SelectedIndex + 1; 
                 }
             }
             else
             {
-                if (!is_playing)
+                if (file_number != playlistItems.SelectedIndex)
                 {
+                    file_number = playlistItems.SelectedIndex;
                     change_file = true;
-                    is_playing = true;
+
+                    if (!is_playing)
+                    {
+                        is_playing = true;
+                    }
+
+                    if (paused)
+                    {
+                        SoundPlayPause.Content = "Pause";
+                        paused = false;
+                        pause_change = true;
+                    }
+                }
+                else
+                {
+                    if (!is_playing)
+                    {
+                        change_file = true;
+                        is_playing = true;
+                    }
                 }
             }
         }
 
         private void Slider_VolumeChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
-            double_volume = e.NewValue; // Linear volume scale
-            volume = 0.0031623f * (float)Math.Exp(double_volume / 100 * 5.757f); // Exp volume scale
-            mudando_volume = true;
+            if (useObjectOrientedMethod)
+            {
+                if (oalPlayer != null)
+                    oalPlayer.Volume = (float)e.NewValue;
+            }
+            else
+            {
+                double_volume = e.NewValue; // Linear volume scale
+                volume = 0.0031623f * (float)Math.Exp(double_volume / 100 * 5.757f); // Exp volume scale
+                mudando_volume = true;
+            }
         }
 
         public void Slider_SpeedChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
-            playback_speed = (float)e.NewValue / 100;
-            mudando_velocidade = true;
+            if (useObjectOrientedMethod)
+            {
+                if (oalPlayer != null)
+                    oalPlayer.Pitch = (float)e.NewValue / 100;
+            }
+            else
+            {
+                playback_speed = (float)e.NewValue / 100;
+                mudando_velocidade = true;
+            }
         }
 
-        private void UpdateCPUUsageText(string message)
+        private void UpdateCPUUsage(object source, EventArgs e)
         {
-            CPUUsagePercent.Text = message;
+            float total_cpu_usage = theCPUCounter.NextValue();
+            CPUUsagePercent.Text = (total_cpu_usage / CPU_logic_processors).ToString("0.0") + "%";
         }
 
         private void UpdateinfoText(string message)
@@ -760,31 +864,21 @@ namespace OpenAL_Music_Player
 
         private void Window_Closing(object sender, EventArgs e)
         {
-            stop_playback = true;
-            playbackthread_enabled = false;
-            is_playing = false;
-            change_file = true;
+            if (useObjectOrientedMethod)
+            {
+                if (oalPlayer != null)
+                    oalPlayer.Dispose();
+                playbackthread_enabled = false;
+            }
+            else
+            {
+                stop_playback = true;
+                playbackthread_enabled = false;
+                is_playing = false;
+                change_file = true;
+            }
         }
 #endregion
-
-        //public static byte[] LoadVorbis(Stream stream, out int channels, out int bits, out int rate, out System.TimeSpan totaltime)
-        //{
-        //    if (stream == null)
-        //        throw new ArgumentNullException("stream");
-
-        //    using (VorbisWaveReader reader = new VorbisWaveReader(stream))
-        //    {
-        //        int num_channels = reader.WaveFormat.Channels;
-        //        int sample_rate = reader.WaveFormat.SampleRate;
-        //        int bits_per_sample = reader.WaveFormat.BitsPerSample;
-        //        totaltime = reader.TotalTime;
-
-        //        channels = num_channels;
-        //        bits = bits_per_sample;
-        //        rate = sample_rate;
-
-        //        byte[] buffer = new byte[reader.Length];
-        //        reader.Read(buffer, 0, buffer.Length);
 
         //        var waveBuffer = new WaveBuffer(buffer);
 
@@ -805,8 +899,6 @@ namespace OpenAL_Music_Player
         //        }
 
         //        return sampleBufferShort.SelectMany(x => BitConverter.GetBytes(x)).ToArray();
-        //    }
-        //}
 
         public static ALFormat GetSoundFormat(int channels, int bits, bool float_support)
         {
@@ -853,7 +945,7 @@ namespace OpenAL_Music_Player
                             }
                             else
                             {
-                                //throw new NotSupportedException("The specified sound format is not supported.");
+                                // Undocumented value
                                 return (ALFormat)0x1203;
                             }
                         }
@@ -870,15 +962,7 @@ namespace OpenAL_Music_Player
                         }
                         else
                         {
-                            if (float_support)
-                            {
-                                return ALFormat.Multi51Chn32Ext;
-                            }
-                            else
-                            {
-                                throw new NotSupportedException("The specified sound format is not supported.");
-                                //return 0x1203;
-                            }
+                            return ALFormat.Multi51Chn32Ext;
                         }
                     }
                 default:
@@ -925,15 +1009,22 @@ namespace OpenAL_Music_Player
 
         private void pitchShiftCheckbox_Checked(object sender, RoutedEventArgs e)
         {
-            if (pitchShiftCheckbox.IsChecked.Value)
+            if (useObjectOrientedMethod)
             {
-                pitch_shift_enabled = true;
-                mudando_velocidade = true;
+                DebugTrace("EFX not implemented yet");
             }
             else
             {
-                pitch_shift_enabled = false;
-                mudando_velocidade = true;
+                if (pitchShiftCheckbox.IsChecked.Value)
+                {
+                    pitch_shift_enabled = true;
+                    mudando_velocidade = true;
+                }
+                else
+                {
+                    pitch_shift_enabled = false;
+                    mudando_velocidade = true;
+                }
             }
         }
 
@@ -970,7 +1061,15 @@ namespace OpenAL_Music_Player
 
         private void ThreadTimeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
-            update_time_ms = (int)e.NewValue;
+            if (useObjectOrientedMethod)
+            {
+                if (oalPlayer != null)
+                    oalPlayer.UpdateRate = (int)e.NewValue;
+            }
+            else
+            {
+                update_time_ms = (int)e.NewValue;
+            }
         }
 
         private void DebugTrace(string message)

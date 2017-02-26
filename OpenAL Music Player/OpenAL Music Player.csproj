@@ -95,6 +95,9 @@
     </Compile>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="OpenALEngine.cs" />
+    <Compile Include="OpenALPlayer.cs" />
+    <Compile Include="OpenALSoundEffect.cs" />
     <Compile Include="Properties\AssemblyInfo.cs">
       <SubType>Code</SubType>
     </Compile>
