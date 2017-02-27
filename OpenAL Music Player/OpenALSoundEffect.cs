@@ -1,8 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 using OpenTK;
 using OpenTK.Audio;
@@ -13,11 +10,11 @@ using Effect = System.Int32;
 using Filter = System.Int32;
 
 using System.IO;
-using System.Diagnostics;
 
 using CSCore;
 using CSCore.Codecs;
 using NVorbis;
+using CSCore.Streams.SampleConverter;
 
 namespace OALEngine
 {
@@ -196,22 +193,28 @@ namespace OALEngine
                 this.buffer = ALContentLoad(filePath);
                 this.filter = alengine.GenFilter();
             }
-
-            // vorbis support
-            CodecFactory.Instance.Register("ogg-vorbis", new CodecFactoryEntry(s => new NVorbisSource(s).ToWaveSource(), ".ogg"));
         }
         #endregion
 
         #region Destructors
+        protected virtual void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                if (isValid)
+                {
+                    this.Stop();
+                    alengine.Check();
+                    alengine.DeleteBuffer(buffer);
+                    isValid = false;
+                }
+            }
+        }
+
         public void Dispose()
         {
-            if (isValid)
-            {
-                this.Stop();
-                alengine.Check();
-                alengine.DeleteBuffer(buffer);
-                isValid = false;
-            }
+            this.Dispose(true);
+            GC.SuppressFinalize(this);
         }
 
         ~OpenALSoundEffect()
@@ -400,16 +403,117 @@ namespace OALEngine
         {
             switch (channels)
             {
-                case 1: return bits == 8 ? ALFormat.Mono8 : ALFormat.Mono16;
-                case 2: return bits == 8 ? ALFormat.Stereo8 : ALFormat.Stereo16;
-                default: throw new NotSupportedException("The specified sound format is not supported.");
+                case 1:
+                    {
+                        if (bits == 8)
+                        {
+                            return ALFormat.Mono8;
+                        }
+                        else if (bits == 16)
+                        {
+                            return ALFormat.Mono16;
+                        }
+                        else
+                        {
+                            if (alengine.IsXFi)
+                            {
+                                throw new NotSupportedException("The specified sound format is not supported.");
+                                //return 0x1203;
+                            }
+                            else
+                            {
+                                if (alengine.IeeeFloat32Support)
+                                {
+                                    return ALFormat.MonoFloat32Ext; 
+                                }
+                                else
+                                {
+                                    throw new NotSupportedException("The specified sound format is not supported.");
+                                }
+                            }
+                        }
+                    }
+                case 2:
+                    {
+                        if (bits == 8)
+                        {
+                            return ALFormat.Stereo8;
+                        }
+                        else if (bits == 16)
+                        {
+                            return ALFormat.Stereo16;
+                        }
+                        else
+                        {
+                            if (alengine.IsXFi)
+                            {
+                                // Undocumented value
+                                return (ALFormat)0x1203;
+                            }
+                            else
+                            {
+                                if (alengine.IeeeFloat32Support)
+                                {
+                                    return ALFormat.StereoFloat32Ext;
+                                }
+                                else
+                                {
+                                    throw new NotSupportedException("The specified sound format is not supported.");
+                                }
+                            }
+                        }
+                    }
+                case 6:
+                    {
+                        if (bits == 8)
+                        {
+                            return ALFormat.Multi51Chn8Ext;
+                        }
+                        else if (bits == 16)
+                        {
+                            return ALFormat.Multi51Chn16Ext;
+                        }
+                        else
+                        {
+                            return ALFormat.Multi51Chn32Ext;
+                        }
+                    }
+                default:
+                    throw new NotSupportedException("The specified sound format is not supported.");
             }
         }
 
         private SoundBuffer ALContentLoad(string filePath)
         {
             var AudioFile = CodecFactory.Instance.GetCodec(filePath);
-            byte[] sound_data = new byte[AudioFile.Length];
+
+            if (alengine.IsXFi && AudioFile.WaveFormat.WaveFormatTag == AudioEncoding.IeeeFloat)
+            {
+                var toSample = AudioFile.ToSampleSource();
+                if (AudioFile.WaveFormat.BitsPerSample == 32)
+                {
+                    AudioFile = new SampleToPcm32(toSample);
+                }
+                else if (AudioFile.WaveFormat.BitsPerSample == 16)
+                {
+                    AudioFile = new SampleToPcm16(toSample);
+                }
+                else
+                {
+                    AudioFile = new SampleToPcm8(toSample);
+                }
+            }
+
+            byte[] sound_data;
+            if (AudioFile.Length > 0)
+            {
+                sound_data = new byte[AudioFile.Length]; 
+            }
+            else
+            {
+                sound_data = new byte[0];
+            }
+
             AudioFile.Read(sound_data, 0, sound_data.Length);
 
             SoundBuffer soundBuffer = AL.GenBuffer();

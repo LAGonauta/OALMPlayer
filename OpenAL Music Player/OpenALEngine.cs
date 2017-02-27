@@ -1,8 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 using OpenTK;
 using OpenTK.Audio;
@@ -105,6 +102,28 @@ namespace OALEngine
             }
         }
 
+        public bool IsXFi
+        {
+            get
+            {
+                if (AL.Get(ALGetString.Renderer).IndexOf("X-Fi") != -1)
+                    return true;
+                else
+                    return false;
+            }
+        }
+
+        public bool IeeeFloat32Support
+        {
+            get
+            {
+                if (AL.IsExtensionPresent("AL_EXT_float32"))
+                    return true;
+                else
+                    return false;
+            }
+        }
+
         #endregion
 
         #region Constructors
@@ -174,17 +193,26 @@ namespace OALEngine
 
         #region Destructors
         // Release EFX and Audio Context
+        protected virtual void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                if (isValid)
+                {
+                    isValid = false;
+                    if (ac != null)
+                    {
+                        ac.Dispose();
+                        ac = null;
+                    }
+                }
+            }
+        }
+
         public void Dispose()
         {
-            if (isValid)
-            {
-                //if (efx)
-                //    this.efx.DeleteEffect();
-
-                ac.Dispose();
-
-                isValid = false;
-            }
+            this.Dispose(true);
+            GC.SuppressFinalize(this);
         }
 
         ~OpenALEngine()

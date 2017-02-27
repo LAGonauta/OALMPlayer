@@ -18,6 +18,7 @@ using System.Linq;
 // TODO:
 // Make it OO
 // Use state machine
+// Use INotifyPropertyChanged 
 
 namespace OpenAL_Music_Player
 {
@@ -41,7 +42,7 @@ namespace OpenAL_Music_Player
         public bool xram_available = false;
 
         // change this to use new system
-        bool useObjectOrientedMethod = false;
+        bool useObjectOrientedMethod = true;
 
         // File control
         public static int file_number = 0;
@@ -61,10 +62,16 @@ namespace OpenAL_Music_Player
         public static bool is_playing = false;
         public static int update_time_ms = 150;
         OpenALPlayer oalPlayer;
+        Thread openal_thread;
 
         // CPU usage
-        private PerformanceCounter theCPUCounter = new PerformanceCounter("Process", "% Processor Time", Process.GetCurrentProcess().ProcessName);
-        private int CPU_logic_processors = Environment.ProcessorCount;
+        PerformanceCounter theCPUCounter = new PerformanceCounter("Process", "% Processor Time", Process.GetCurrentProcess().ProcessName);
+        int CPU_logic_processors = Environment.ProcessorCount;
+        float total_cpu_usage;
+
+        // Info text
+        string message;
+        System.Windows.Forms.Timer InfoText;
 
         // Variable used when verifying if user closed the window (to clean up) 
         public byte p = 0;
@@ -79,6 +86,9 @@ namespace OpenAL_Music_Player
         public MainWindow()
         {
             InitializeComponent();
+
+            // vorbis support
+            CodecFactory.Instance.Register("ogg-vorbis", new CodecFactoryEntry(s => new NVorbisSource(s).ToWaveSource(), ".ogg"));
 
             playlistItems.ItemsSource = items;
 
@@ -95,7 +105,6 @@ namespace OpenAL_Music_Player
             }
 
             // Starting audio thread
-            Thread openal_thread;
             if (useObjectOrientedMethod)
             {
                 openal_thread = new Thread(new ThreadStart(OpenALThread2));
@@ -115,7 +124,7 @@ namespace OpenAL_Music_Player
 
             // Starting GUI information update timer
             this.UpdateCPUUsage(null, null);
-            var InfoText = new System.Windows.Forms.Timer();
+            InfoText = new System.Windows.Forms.Timer();
             InfoText.Interval = 150;
             InfoText.Tick += new EventHandler(this.UpdateInfoText);
             InfoText.Start();
@@ -290,7 +299,6 @@ namespace OpenAL_Music_Player
                         DebugTrace("No file to load.");
                         break;
                     }
-
 
                     if (IsXFi && AudioFile.WaveFormat.WaveFormatTag == AudioEncoding.IeeeFloat)
                     {
@@ -621,23 +629,20 @@ namespace OpenAL_Music_Player
                     {
                         if (oalPlayer.Status == OpenALPlayer.PlayerState.Paused)
                         {
-                            SoundPlayPause.Content = "Play";
-                            paused = false;
-                            if (useObjectOrientedMethod)
-                                oalPlayer.Unpause();
+                            oalPlayer.Unpause();
+                            SoundPlayPause.Content = "Pause";
                         }
                         else
-                        {
-                            SoundPlayPause.Content = "Pause";
-                            paused = true;
+                        {  
                             if (oalPlayer.Status == OpenALPlayer.PlayerState.Playing)
                             {
-                                if (useObjectOrientedMethod)
-                                    oalPlayer.Pause(); 
+                                oalPlayer.Pause();
+                                SoundPlayPause.Content = "Play";
                             }
                             else
                             {
                                 oalPlayer.Play();
+                                SoundPlayPause.Content = "Pause";
                             }
                         }
 
@@ -683,6 +688,7 @@ namespace OpenAL_Music_Player
                 {
                     if (useObjectOrientedMethod)
                     {
+                        SoundPlayPause.Content = "Pause";
                         oalPlayer.NextTrack();
                         playlistItems.SelectedIndex = oalPlayer.CurrentMusic - 1;
                     }
@@ -705,6 +711,7 @@ namespace OpenAL_Music_Player
         {
             if (useObjectOrientedMethod)
             {
+                SoundPlayPause.Content = "Play";
                 oalPlayer.Stop();
             }
             else
@@ -724,6 +731,7 @@ namespace OpenAL_Music_Player
                 {
                     if (useObjectOrientedMethod)
                     {
+                        SoundPlayPause.Content = "Pause";
                         oalPlayer.PreviousTrack();
                         playlistItems.SelectedIndex = oalPlayer.CurrentMusic - 1;
                     }
@@ -757,6 +765,7 @@ namespace OpenAL_Music_Player
             {
                 if (playlistItems.SelectedIndex != -1)
                 {
+                    SoundPlayPause.Content = "Pause";
                     // is SelectedIndex zero indexed? Yes.
                     oalPlayer.CurrentMusic = playlistItems.SelectedIndex + 1; 
                 }
@@ -822,7 +831,7 @@ namespace OpenAL_Music_Player
 
         private void UpdateCPUUsage(object source, EventArgs e)
         {
-            float total_cpu_usage = theCPUCounter.NextValue();
+            total_cpu_usage = theCPUCounter.NextValue();
             CPUUsagePercent.Text = (total_cpu_usage / CPU_logic_processors).ToString("0.0") + "%";
         }
 
@@ -835,13 +844,12 @@ namespace OpenAL_Music_Player
         {
             if (oalPlayer != null)
             {
-                string message;
                 message = ("Música atual: " + (oalPlayer.CurrentMusic)) + Environment.NewLine +
                     ("Posição: " + (int)oalPlayer.TrackCurrentTime + "s/" + (int)oalPlayer.TrackTotalTime + "s") + Environment.NewLine +
                     ("Volume: " + (int)(oalPlayer.Volume) + "%") + Environment.NewLine +
                     ("Velocidade: " + (int)(oalPlayer.Pitch * 100) + "%");
 
-                if (oalPlayer.IsXFi == false)
+                if (oalPlayer.XRamTotal > 0)
                 {
                     message = message + Environment.NewLine + ("XRam livre: " + (oalPlayer.XRamFree / (1024.0 * 1024)).ToString("0.00") + "MB");
                 }
@@ -897,7 +905,6 @@ namespace OpenAL_Music_Player
             {
                 if (oalPlayer != null)
                     oalPlayer.Dispose();
-                playbackthread_enabled = false;
             }
             else
             {
@@ -1094,6 +1101,9 @@ namespace OpenAL_Music_Player
             {
                 if (oalPlayer != null)
                     oalPlayer.UpdateRate = (int)e.NewValue;
+
+                if (InfoText != null)
+                    InfoText.Interval = (int)e.NewValue;
             }
             else
             {

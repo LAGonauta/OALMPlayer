@@ -1,13 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 using OALEngine;
 using System.Threading;
 using OpenTK.Audio;
-using System.Diagnostics;
 
 namespace OpenAL_Music_Player
 {
@@ -230,14 +226,40 @@ namespace OpenAL_Music_Player
         #endregion
 
         #region Destructor
+        protected virtual void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                if (isValid)
+                {
+                    isValid = false;
+
+                    if (timer != null)
+                    {
+                        timer.Change(Timeout.Infinite, Timeout.Infinite);
+                        timer.Dispose();
+                        timer = null;
+                    }
+
+                    if (music != null)
+                    {
+                        music.Dispose();
+                        music = null;
+                    }
+
+                    if (alengine != null)
+                    {
+                        alengine.Dispose();
+                        alengine = null;
+                    }
+                }
+            }
+        }
+
         public void Dispose()
         {
-            if (isValid)
-            {
-                isValid = false;
-                if (alengine != null)
-                    alengine.Dispose();
-            }
+            this.Dispose(true);
+            GC.SuppressFinalize(this);
         }
 
         ~OpenALPlayer()
