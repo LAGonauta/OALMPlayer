@@ -645,6 +645,17 @@ namespace OALEngine
             }
         }
 
+        public ALError CheckALError(string message)
+        {
+            error = AL.GetError();
+
+            if (error != ALError.NoError)
+            {
+                System.Diagnostics.Trace.WriteLine("Error " + message + ": " + error);
+            }
+
+            return error;
+        }
         #endregion
 
         #region Private methods
@@ -821,18 +832,6 @@ namespace OALEngine
                     ++priorityNumber.MustPlay;
                     break;
             }
-        }
-
-        private ALError CheckALError(string message)
-        {
-            error = AL.GetError();
-
-            if (error != ALError.NoError)
-            {
-                System.Diagnostics.Trace.WriteLine("Error " + message + ": " + error);
-            }
-
-            return error;
         }
         #endregion
 
