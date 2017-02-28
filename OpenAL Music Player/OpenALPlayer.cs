@@ -370,10 +370,17 @@ namespace OpenAL_Music_Player
                     {
                         if (!music.IsPlaying)
                         {
-                            if (music.CurrentTime == 0) // bad, but sometimes X-Fi OpenAL reports a 5.1 audio as stopped while it is not... the time wraps around to zero when finished.
+                            var currentTime = music.CurrentTime;
+                            if (currentTime < music.TotalTime && currentTime != 0)
+                            {
+                                var tempTime = music.CurrentTime;
+                                music.Play();
+                                music.CurrentTime = tempTime;
+                            }
+                            else
                             {
                                 this.NextTrack();
-                            }  
+                            }
                         }
                     }
 
@@ -417,7 +424,7 @@ namespace OpenAL_Music_Player
                         }
                     }
 
-                    music = new OpenALSoundEffect(musicList[currentMusic], ref alengine);
+                    music = new OpenALSoundEffect(musicList[currentMusic], ref alengine, true);
                     trackTotalTime = music.TotalTime;
                     music.Play();
 

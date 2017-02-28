@@ -15,6 +15,8 @@ using CSCore;
 using CSCore.Codecs;
 using NVorbis;
 using CSCore.Streams.SampleConverter;
+using System.Timers;
+using System.Diagnostics;
 
 namespace OALEngine
 {
@@ -24,10 +26,19 @@ namespace OALEngine
         // audio device
         OpenALEngine alengine;
         IList<string> devices = AudioContext.AvailableDevices;
+        IWaveSource AudioFile;
 
-        // buffer
+        // static buffer
         SoundBuffer buffer;
 
+        // streaming support
+        const int streamingBufferTime = 5000; // in milliseconds
+        const int streamingBufferQueueSize = 80;
+        int streamingBufferSize;
+        List<Queue<SoundBuffer>> streamingBufferQueueList;
+        Timer streamingTimer;
+        Timer streamingCurrentTimeTimer;
+        Stopwatch streamingCurrentTimeStopWatch;
         // sources
         List<OpenALEngine.SourceInstance> sources = new List<OpenALEngine.SourceInstance>();
 
@@ -36,6 +47,9 @@ namespace OALEngine
 
         // valid sound effect
         bool isValid = true;
+
+        // streaming support
+        bool streamingSoundEffect = false;
 
         // looping support
         bool looping = false;
@@ -69,6 +83,14 @@ namespace OALEngine
                     if (AL.IsSource(source.id))
                         AL.Source(source.id, ALSourceb.Looping, value);
                 }
+            }
+        }
+
+        public bool IsStream
+        {
+            get
+            {
+                return streamingSoundEffect;
             }
         }
 
@@ -116,8 +138,6 @@ namespace OALEngine
                         AL.Source(source.id, ALSourcef.Pitch, pitch);
                 }
             }
-
-
         }
 
         public float MinGain
@@ -156,16 +176,50 @@ namespace OALEngine
             }
         }
 
+        /// <summary>
+        /// Set or gets effects current running time
+        /// </summary>
         public float CurrentTime
         {
             get
             {
-                foreach (OpenALEngine.SourceInstance source in sources)
+                if (streamingSoundEffect)
                 {
-                    if (AL.IsSource(source.id))
-                        AL.GetSource(source.id, ALSourcef.SecOffset, out currentTime);
+                    //return (float)AudioFile.GetPosition().TotalSeconds - streamingBufferTime / 1000 * streamingBufferQueueSize;
+                    return currentTime;
+                }
+                else
+                {
+                    foreach (OpenALEngine.SourceInstance source in sources)
+                    {
+                        if (AL.IsSource(source.id))
+                            AL.GetSource(source.id, ALSourcef.SecOffset, out currentTime);
+                    }
                 }
                 return currentTime;
+            }
+
+            set
+            {
+                if (streamingSoundEffect)
+                {
+                    try
+                    {
+                        AudioFile.SetPosition(new TimeSpan(0, 0, (int)value));
+                    }
+                    catch
+                    {
+
+                    }                    
+                }
+                else
+                {
+                    foreach (OpenALEngine.SourceInstance source in sources)
+                    {
+                        if (AL.IsSource(source.id))
+                            AL.Source(source.id, ALSourcef.SecOffset, value);
+                    }
+                }
             }
         }
 
@@ -185,12 +239,38 @@ namespace OALEngine
         /// </summary>
         /// <param name="filePath"></param>
         /// <param name="ac"></param>
-        public OpenALSoundEffect(string filePath, ref OpenALEngine alengine)
+        public OpenALSoundEffect(string filePath, ref OpenALEngine alengine) : this(filePath, ref alengine, false) { }
+
+        public OpenALSoundEffect(string filePath, ref OpenALEngine alengine, bool streaming)
         {
             if (alengine != null && filePath != null)
             {
                 this.alengine = alengine;
-                this.buffer = ALContentLoad(filePath);
+                streamingSoundEffect = streaming;
+
+                if (!streamingSoundEffect)
+                {
+                    this.buffer = ALContentLoad(filePath);
+                }
+                else
+                {
+                    this.streamingBufferQueueList = ALContentBufferStream(filePath);
+
+                    // activate queue timer
+                    streamingTimer = new Timer();
+                    streamingTimer.Interval = 25;
+                    streamingTimer.Elapsed += new ElapsedEventHandler(this.CheckQueue);
+                    streamingTimer.Start();
+
+                    // enable currentTime timer
+                    streamingCurrentTimeTimer = new Timer();
+                    streamingCurrentTimeTimer.Interval = 500;
+                    streamingCurrentTimeTimer.Elapsed += new ElapsedEventHandler(this.UpdateCurrentTime);
+                    streamingCurrentTimeTimer.Start();
+
+                    // stopwatch
+                    streamingCurrentTimeStopWatch = new Stopwatch();
+                }
                 this.filter = alengine.GenFilter();
             }
         }
@@ -204,8 +284,47 @@ namespace OALEngine
                 if (isValid)
                 {
                     this.Stop();
-                    alengine.Check();
-                    alengine.DeleteBuffer(buffer);
+                    if (streamingSoundEffect)
+                    {
+                        if (streamingTimer != null)
+                        {
+                            streamingTimer.Stop();
+                            streamingTimer = null; 
+                        }
+
+                        if (streamingCurrentTimeTimer != null)
+                        {
+                            streamingCurrentTimeTimer.Stop();
+                            streamingCurrentTimeTimer = null;
+                        }
+
+                        for (int i = sources.Count - 1; i >= 0; --i)
+                        {
+                            // unbind all buffers from source and clear them
+                            AL.BindBufferToSource(sources[i].id, 0);
+                            SoundBuffer dequeueBuffer;
+                            while (streamingBufferQueueList[i].Count > 0)
+                            {
+                                dequeueBuffer = streamingBufferQueueList[i].Dequeue();
+                                AL.DeleteBuffer(dequeueBuffer);
+                            }                            
+
+                            // clear sources
+                            if (AL.GetSourceState(sources[i].id) == ALSourceState.Stopped)
+                            {
+                                AL.DeleteSource(sources[i].id);
+                                sources.RemoveAt(i);
+                            }
+                        }
+
+                        streamingBufferQueueList.Clear();
+                    }
+                    else
+                    {
+                        alengine.Check();
+                        alengine.DeleteBuffer(buffer);
+                    }
+                    
                     isValid = false;
                 }
             }
@@ -233,6 +352,7 @@ namespace OALEngine
                     AL.SourceStop(sources[i].id);
                 }
             }
+            currentTime = 0;
             this.Check();
         }
 
@@ -245,6 +365,12 @@ namespace OALEngine
                     AL.SourcePause(source.id);
                 }
             }
+
+            if (streamingSoundEffect)
+            {
+                streamingCurrentTimeStopWatch.Stop();
+                streamingTimer.Stop();
+            }
         }
 
         public void Unpause()
@@ -256,12 +382,53 @@ namespace OALEngine
                     AL.SourcePlay(source.id);
                 }
             }
+
+            if (streamingSoundEffect)
+            {
+                streamingCurrentTimeStopWatch.Start();
+                streamingTimer.Start();
+            }
         }
 
         public OpenALEngine.SourceInstance Play()
         {
-            var source = alengine.PlaySound(looping, buffer);
-            sources.Add(source);
+            OpenALEngine.SourceInstance source;
+
+            if (streamingSoundEffect)
+            {
+                // lets do it here for now... or for ever.
+                source = new OpenALEngine.SourceInstance();
+                source.id = AL.GenSource();
+                source.priority = OpenALEngine.SoundPriority.BestEffort;
+
+                if (IsLooped)
+                {
+                    AL.Source(source.id, ALSourceb.Looping, true);
+                    source.looping = true;
+                }
+                else
+                {
+                    source.looping = false;
+                }
+
+                sources.Add(source);
+                StartStreaming();
+                currentTime = 0;
+                AL.SourcePlay(source.id);
+
+                if (!streamingCurrentTimeStopWatch.IsRunning)
+                    streamingCurrentTimeStopWatch.Start();
+                else
+                    streamingCurrentTimeStopWatch.Restart();
+
+                streamingTimer.Start();
+            }
+            else
+            {
+                source = alengine.PlaySound(looping, buffer);
+                sources.Add(source);
+            }
+
             return source;
         }
 
@@ -485,7 +652,7 @@ namespace OALEngine
 
         private SoundBuffer ALContentLoad(string filePath)
         {
-            var AudioFile = CodecFactory.Instance.GetCodec(filePath);
+            AudioFile = CodecFactory.Instance.GetCodec(filePath);
 
             if (alengine.IsXFi && AudioFile.WaveFormat.WaveFormatTag == AudioEncoding.IeeeFloat)
             {
@@ -519,9 +686,137 @@ namespace OALEngine
             SoundBuffer soundBuffer = AL.GenBuffer();
             AL.BufferData(soundBuffer, GetSoundFormat(AudioFile.WaveFormat.Channels, AudioFile.WaveFormat.BitsPerSample), sound_data, sound_data.Length, AudioFile.WaveFormat.SampleRate);
             totalTime = AudioFile.Length * sizeof(byte) / AudioFile.WaveFormat.BytesPerSecond;
+            //totalTime = AudioFile.GetMilliseconds(AudioFile.Length) / 1000;
+            //totalTime = (float)AudioFile.GetLength().TotalSeconds;
 
             AudioFile.Dispose();
             return soundBuffer;
+        }
+
+        private List<Queue<SoundBuffer>> ALContentBufferStream(string filePath)
+        {
+            AudioFile = CodecFactory.Instance.GetCodec(filePath);
+
+            if (alengine.IsXFi && AudioFile.WaveFormat.WaveFormatTag == AudioEncoding.IeeeFloat)
+            {
+                var toSample = AudioFile.ToSampleSource();
+                if (AudioFile.WaveFormat.BitsPerSample == 32)
+                {
+                    AudioFile = new SampleToPcm32(toSample);
+                }
+                else if (AudioFile.WaveFormat.BitsPerSample == 16)
+                {
+                    AudioFile = new SampleToPcm16(toSample);
+                }
+                else
+                {
+                    AudioFile = new SampleToPcm8(toSample);
+                }
+            }
+
+            totalTime = AudioFile.Length * sizeof(byte) / AudioFile.WaveFormat.BytesPerSecond;
+            streamingBufferSize = (int)AudioFile.GetRawElements(streamingBufferTime);
+            var bufferQueue = new List<Queue<SoundBuffer>>();
+
+            return bufferQueue;
+        }
+
+        /// <summary>
+        /// This will check a source queue
+        /// </summary>
+        private void CheckQueue(object obj, ElapsedEventArgs e)
+        {
+            streamingTimer.Stop();
+            for (int i = 0, final = sources.Count; i < final; ++i)
+            {
+                if (AL.GetSourceType(sources[i].id) == ALSourceType.Streaming)
+                {
+                    int buffersQueued, buffersProcessed;
+                    int size = 0;
+
+                    // queue new buffers
+                    AL.GetSource(sources[i].id, ALGetSourcei.BuffersQueued, out buffersQueued);
+                    if (buffersQueued < streamingBufferQueueSize && AudioFile.Position < AudioFile.Length)
+                    {
+                        if (AudioFile.Length - AudioFile.Position < streamingBufferSize)
+                            size = (int)(AudioFile.Length - AudioFile.Position);
+                        else
+                            size = streamingBufferSize;
+
+                        byte[] sound_data;
+                        sound_data = new byte[size];
+                        AudioFile.Read(sound_data, 0, sound_data.Length);
+
+                        SoundBuffer soundBuffer = AL.GenBuffer();
+                        AL.BufferData(soundBuffer, GetSoundFormat(AudioFile.WaveFormat.Channels, AudioFile.WaveFormat.BitsPerSample), sound_data, sound_data.Length, AudioFile.WaveFormat.SampleRate);
+
+                        AL.SourceQueueBuffer(sources[i].id, soundBuffer);
+                        streamingBufferQueueList[i].Enqueue(soundBuffer);
+                        Trace.WriteLine("Buffer count: "+ streamingBufferQueueList[i].Count + ". Queued buffer at: " + currentTime + "s");
+                    }
+
+                    // clear played buffers
+                    AL.GetSource(sources[i].id, ALGetSourcei.BuffersProcessed, out buffersProcessed);
+                    AL.SourceUnqueueBuffer(sources[i].id);
+                    for (int m = 0; m < buffersProcessed; ++m)
+                    {
+                        if (streamingBufferQueueList[i].Count > 0)
+                        {
+                            var dequeueBuffer = streamingBufferQueueList[i].Dequeue();
+                            AL.DeleteBuffer(dequeueBuffer); 
+                        }
+                        Trace.WriteLine("Buffer count: " + streamingBufferQueueList[i].Count + ". Dequeued " + buffersProcessed + " buffers at: " + currentTime + "s");
+                    }
+                }
+            }
+            streamingTimer.Start();
+        }
+
+        private void StartStreaming()
+        {
+            for (int i = 0, final = sources.Count; i < final; ++i)
+            {
+                if (AL.GetSourceState(sources[i].id) == ALSourceState.Initial && streamingSoundEffect)
+                {
+                    int buffersQueued;
+
+                    // create new queue
+                    Queue<SoundBuffer> soundQueue = new Queue<SoundBuffer>();
+                    streamingBufferQueueList.Add(soundQueue);
+                    
+                    // queue new buffers
+                    AL.GetSource(sources[i].id, ALGetSourcei.BuffersQueued, out buffersQueued);
+                    if (buffersQueued < streamingBufferQueueSize && AudioFile.Position < AudioFile.Length)
+                    {
+                        byte[] sound_data;
+                        if (AudioFile.Length - AudioFile.Position < streamingBufferSize)
+                        {
+                            sound_data = new byte[AudioFile.Length - AudioFile.Position];
+                        }
+                        else
+                        {
+                            sound_data = new byte[streamingBufferSize];
+                        }
+
+                        AudioFile.Read(sound_data, 0, sound_data.Length);
+
+                        SoundBuffer soundBuffer = AL.GenBuffer();
+                        AL.BufferData(soundBuffer, GetSoundFormat(AudioFile.WaveFormat.Channels, AudioFile.WaveFormat.BitsPerSample), sound_data, sound_data.Length, AudioFile.WaveFormat.SampleRate);
+
+                        AL.SourceQueueBuffer(sources[i].id, soundBuffer);
+                        soundQueue.Enqueue(soundBuffer);
+                    }
+                }
+            }
+        }
+
+        private void UpdateCurrentTime(object obj, ElapsedEventArgs e)
+        {
+            streamingCurrentTimeTimer.Stop();
+            if (this.IsPlaying)
+                this.currentTime += (float)streamingCurrentTimeStopWatch.ElapsedMilliseconds / 1000 * pitch;
+            streamingCurrentTimeStopWatch.Restart();
+            streamingCurrentTimeTimer.Start();
         }
         #endregion
     }
