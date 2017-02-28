@@ -28,11 +28,11 @@ namespace OpenAL_Music_Player
         PlayerState currentState;
         PlayerState lastState;
         int currentMusic;
-        float trackTotalTime;
-        float trackCurrentTime;
-        float volumePercentage;
-        float volume;
-        float pitch;
+        float trackTotalTime = 0;
+        float trackCurrentTime = 0;
+        float volumePercentage = 100;
+        float volume = 1f;
+        float pitch = 1f;
 
         // sound "effect"
         OpenALSoundEffect music;
@@ -426,7 +426,8 @@ namespace OpenAL_Music_Player
 
                     music = new OpenALSoundEffect(musicList[currentMusic], ref alengine, true);
                     trackTotalTime = music.TotalTime;
-                    music.Play();
+                    music.Play(volume);
+                    music.Pitch = pitch;
 
                     currentState = PlayerState.Playing;
                     lastState = PlayerState.ChangingTrack;

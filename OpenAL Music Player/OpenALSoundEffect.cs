@@ -32,8 +32,8 @@ namespace OALEngine
         SoundBuffer buffer;
 
         // streaming support
-        const int streamingBufferTime = 5000; // in milliseconds
-        const int streamingBufferQueueSize = 80;
+        const int streamingBufferTime = 20000; // in milliseconds
+        int streamingBufferQueueSize = 5;
         int streamingBufferSize;
         List<Queue<SoundBuffer>> streamingBufferQueueList;
         Timer streamingTimer;
@@ -434,8 +434,44 @@ namespace OALEngine
 
         public OpenALEngine.SourceInstance Play(float volume)
         {
-            var source = alengine.PlaySound(looping, buffer, volume);
-            sources.Add(source);
+            OpenALEngine.SourceInstance source;
+
+            if (streamingSoundEffect)
+            {
+                // lets do it here for now... or for ever.
+                source = new OpenALEngine.SourceInstance();
+                source.id = AL.GenSource();
+                source.priority = OpenALEngine.SoundPriority.BestEffort;
+
+                if (IsLooped)
+                {
+                    AL.Source(source.id, ALSourceb.Looping, true);
+                    source.looping = true;
+                }
+                else
+                {
+                    source.looping = false;
+                }
+
+                sources.Add(source);
+                StartStreaming();
+                currentTime = 0;
+                this.Gain = volume;
+                AL.SourcePlay(source.id);
+
+                if (!streamingCurrentTimeStopWatch.IsRunning)
+                    streamingCurrentTimeStopWatch.Start();
+                else
+                    streamingCurrentTimeStopWatch.Restart();
+
+                streamingTimer.Start();
+            }
+            else
+            {
+                source = alengine.PlaySound(looping, buffer, volume);
+                sources.Add(source);
+            }
+
             return source;
         }
 
@@ -718,6 +754,11 @@ namespace OALEngine
             streamingBufferSize = (int)AudioFile.GetRawElements(streamingBufferTime);
             var bufferQueue = new List<Queue<SoundBuffer>>();
 
+            // set queue size
+            streamingBufferQueueSize = alengine.GetXRamFree / streamingBufferSize;
+            if (streamingBufferQueueSize < 3)
+                streamingBufferQueueSize = 3;
+
             return bufferQueue;
         }
 
@@ -752,7 +793,7 @@ namespace OALEngine
 
                         AL.SourceQueueBuffer(sources[i].id, soundBuffer);
                         streamingBufferQueueList[i].Enqueue(soundBuffer);
-                        Trace.WriteLine("Buffer count: "+ streamingBufferQueueList[i].Count + ". Queued buffer at: " + currentTime + "s");
+                        //Trace.WriteLine("Buffer count: "+ streamingBufferQueueList[i].Count + ". Queued buffer at: " + currentTime + "s");
                     }
 
                     // clear played buffers
@@ -765,7 +806,7 @@ namespace OALEngine
                             var dequeueBuffer = streamingBufferQueueList[i].Dequeue();
                             AL.DeleteBuffer(dequeueBuffer); 
                         }
-                        Trace.WriteLine("Buffer count: " + streamingBufferQueueList[i].Count + ". Dequeued " + buffersProcessed + " buffers at: " + currentTime + "s");
+                        //Trace.WriteLine("Buffer count: " + streamingBufferQueueList[i].Count + ". Dequeued " + buffersProcessed + " buffers at: " + currentTime + "s");
                     }
                 }
             }
@@ -783,7 +824,7 @@ namespace OALEngine
                     // create new queue
                     Queue<SoundBuffer> soundQueue = new Queue<SoundBuffer>();
                     streamingBufferQueueList.Add(soundQueue);
-                    
+
                     // queue new buffers
                     AL.GetSource(sources[i].id, ALGetSourcei.BuffersQueued, out buffersQueued);
                     if (buffersQueued < streamingBufferQueueSize && AudioFile.Position < AudioFile.Length)
