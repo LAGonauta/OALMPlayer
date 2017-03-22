@@ -32,10 +32,12 @@ namespace OALEngine
         SoundBuffer buffer;
 
         // streaming support
-        const int streamingBufferTime = 20000; // in milliseconds
+        const int streamingBufferTime = 500; // in milliseconds
         int streamingBufferQueueSize = 5;
         int streamingBufferSize;
         List<Queue<SoundBuffer>> streamingBufferQueueList;
+        // needed to properly dispose of buffers when Creative's OpenAL do not return it as played.
+        List<SoundBuffer> allBuffers;
         Timer streamingTimer;
         Timer streamingCurrentTimeTimer;
         Stopwatch streamingCurrentTimeStopWatch;
@@ -270,6 +272,9 @@ namespace OALEngine
 
                     // stopwatch
                     streamingCurrentTimeStopWatch = new Stopwatch();
+
+                    // Creative's OpenAL workaround
+                    allBuffers = new List<SoundBuffer>();
                 }
                 this.filter = alengine.GenFilter();
             }
@@ -300,14 +305,20 @@ namespace OALEngine
 
                         for (int i = sources.Count - 1; i >= 0; --i)
                         {
+                            // stop source
+                            AL.SourceStop(sources[i].id);
+                            AL.SourceUnqueueBuffer(sources[i].id);
                             // unbind all buffers from source and clear them
                             AL.BindBufferToSource(sources[i].id, 0);
                             SoundBuffer dequeueBuffer;
                             while (streamingBufferQueueList[i].Count > 0)
                             {
                                 dequeueBuffer = streamingBufferQueueList[i].Dequeue();
-                                AL.DeleteBuffer(dequeueBuffer);
-                            }                            
+                                if (AL.IsBuffer(dequeueBuffer))
+                                {
+                                    AL.DeleteBuffer(dequeueBuffer);
+                                }                                    
+                            }
 
                             // clear sources
                             if (AL.GetSourceState(sources[i].id) == ALSourceState.Stopped)
@@ -315,6 +326,19 @@ namespace OALEngine
                                 AL.DeleteSource(sources[i].id);
                                 sources.RemoveAt(i);
                             }
+                        }
+
+                        // Creative's OpenAL workaround
+                        if (alengine.IsXFi)
+                        {
+                            foreach (SoundBuffer buffer in allBuffers)
+                            {
+                                if (AL.IsBuffer(buffer))
+                                {
+                                    AL.DeleteBuffer(buffer);
+                                }
+                            }
+                            allBuffers.Clear(); 
                         }
 
                         streamingBufferQueueList.Clear();
@@ -709,13 +733,9 @@ namespace OALEngine
 
             byte[] sound_data;
             if (AudioFile.Length > 0)
-            {
-                sound_data = new byte[AudioFile.Length]; 
-            }
+                sound_data = new byte[AudioFile.Length];
             else
-            {
                 sound_data = new byte[0];
-            }
 
             AudioFile.Read(sound_data, 0, sound_data.Length);
 
@@ -737,17 +757,11 @@ namespace OALEngine
             {
                 var toSample = AudioFile.ToSampleSource();
                 if (AudioFile.WaveFormat.BitsPerSample == 32)
-                {
                     AudioFile = new SampleToPcm32(toSample);
-                }
                 else if (AudioFile.WaveFormat.BitsPerSample == 16)
-                {
                     AudioFile = new SampleToPcm16(toSample);
-                }
                 else
-                {
                     AudioFile = new SampleToPcm8(toSample);
-                }
             }
 
             totalTime = AudioFile.Length * sizeof(byte) / AudioFile.WaveFormat.BytesPerSecond;
@@ -755,7 +769,7 @@ namespace OALEngine
             var bufferQueue = new List<Queue<SoundBuffer>>();
 
             // set queue size
-            streamingBufferQueueSize = alengine.GetXRamFree / streamingBufferSize;
+            //streamingBufferQueueSize = alengine.GetXRamFree / streamingBufferSize;
             if (streamingBufferQueueSize < 3)
                 streamingBufferQueueSize = 3;
 
@@ -793,6 +807,12 @@ namespace OALEngine
 
                         AL.SourceQueueBuffer(sources[i].id, soundBuffer);
                         streamingBufferQueueList[i].Enqueue(soundBuffer);
+
+                        // Creative's OpenAL workaround
+                        if (alengine.IsXFi)
+                        {
+                            allBuffers.Add(soundBuffer); 
+                        }
                         //Trace.WriteLine("Buffer count: "+ streamingBufferQueueList[i].Count + ". Queued buffer at: " + currentTime + "s");
                     }
 
@@ -804,7 +824,7 @@ namespace OALEngine
                         if (streamingBufferQueueList[i].Count > 0)
                         {
                             var dequeueBuffer = streamingBufferQueueList[i].Dequeue();
-                            AL.DeleteBuffer(dequeueBuffer); 
+                            AL.DeleteBuffer(dequeueBuffer);
                         }
                         //Trace.WriteLine("Buffer count: " + streamingBufferQueueList[i].Count + ". Dequeued " + buffersProcessed + " buffers at: " + currentTime + "s");
                     }
@@ -831,13 +851,9 @@ namespace OALEngine
                     {
                         byte[] sound_data;
                         if (AudioFile.Length - AudioFile.Position < streamingBufferSize)
-                        {
                             sound_data = new byte[AudioFile.Length - AudioFile.Position];
-                        }
                         else
-                        {
                             sound_data = new byte[streamingBufferSize];
-                        }
 
                         AudioFile.Read(sound_data, 0, sound_data.Length);
 
@@ -846,6 +862,12 @@ namespace OALEngine
 
                         AL.SourceQueueBuffer(sources[i].id, soundBuffer);
                         soundQueue.Enqueue(soundBuffer);
+
+                        // Creative's OpenAL workaround
+                        if (alengine.IsXFi)
+                        {
+                            allBuffers.Add(soundBuffer); 
+                        }
                     }
                 }
             }
