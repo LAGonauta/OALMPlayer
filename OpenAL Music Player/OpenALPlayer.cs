@@ -418,12 +418,9 @@ namespace OpenAL_Music_Player
                     
                     if (music != null)
                     {
-                        if (music.IsPlaying)
-                        {
-                            music.Dispose();
-                        }
+                        music.Dispose();
                     }
-
+                    
                     music = new OpenALSoundEffect(musicList[currentMusic], ref alengine, true);
                     trackTotalTime = music.TotalTime;
                     music.Play(volume);

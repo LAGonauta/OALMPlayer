@@ -32,12 +32,17 @@ namespace OALEngine
         SoundBuffer buffer;
 
         // streaming support
-        const int streamingBufferTime = 500; // in milliseconds
-        int streamingBufferQueueSize = 5;
+        const int streamingBufferTime = 1000; // in milliseconds
+        int streamingBufferQueueSize = 10;
         int streamingBufferSize;
         Timer streamingTimer;
         Timer streamingCurrentTimeTimer;
         Stopwatch streamingCurrentTimeStopWatch;
+
+        // debug streaming
+        long bufferedTotal = 0;
+        long releasedTotal = 0;
+
         // sources
         List<OpenALEngine.SourceInstance> sources = new List<OpenALEngine.SourceInstance>();
 
@@ -301,9 +306,6 @@ namespace OALEngine
                         {
                             if (AL.IsSource(sources[i].id))
                             {
-                                // force stop
-                                AL.SourceStop(sources[i].id);
-
                                 // unqueue any buffers
                                 int buffersProcessed = 0;
                                 AL.GetSource(sources[i].id, ALGetSourcei.BuffersProcessed, out buffersProcessed);
@@ -312,7 +314,11 @@ namespace OALEngine
                                     SoundBuffer[] dequeuedBuffers = AL.SourceUnqueueBuffers(sources[i].id, buffersProcessed);
 
                                     foreach (SoundBuffer dequeuedBuffer in dequeuedBuffers)
+                                    {
                                         AL.DeleteBuffer(dequeuedBuffer);
+                                        ++releasedTotal;
+                                    }
+                                        
                                 }
 
                                 // unbind all buffers from source
@@ -321,6 +327,12 @@ namespace OALEngine
                                 // clear source
                                 AL.DeleteSource(sources[i].id);
                                 sources.RemoveAt(i);
+
+                                if (bufferedTotal != releasedTotal)
+                                {
+                                    Trace.WriteLine("Buffered = " + bufferedTotal);
+                                    Trace.WriteLine("Released = " + releasedTotal);
+                                }
                             }
                         }
                     }
@@ -750,6 +762,9 @@ namespace OALEngine
 
             // set queue size
             //streamingBufferQueueSize = alengine.GetXRamFree / streamingBufferSize;
+            if (streamingBufferQueueSize > alengine.GetXRamFree / streamingBufferSize)
+                streamingBufferQueueSize = alengine.GetXRamFree / streamingBufferSize;
+
             if (streamingBufferQueueSize < 3)
                 streamingBufferQueueSize = 3;
         }
@@ -784,6 +799,7 @@ namespace OALEngine
                         AL.BufferData(soundBuffer, GetSoundFormat(AudioFile.WaveFormat.Channels, AudioFile.WaveFormat.BitsPerSample), sound_data, sound_data.Length, AudioFile.WaveFormat.SampleRate);
 
                         AL.SourceQueueBuffer(sources[i].id, soundBuffer);
+                        ++bufferedTotal;
                     }
 
                     // clear played buffers
@@ -794,7 +810,13 @@ namespace OALEngine
                         SoundBuffer[] dequeuedBuffers = AL.SourceUnqueueBuffers(sources[i].id, buffersProcessed);
 
                         foreach (SoundBuffer dequeuedBuffer in dequeuedBuffers)
+                        {
                             AL.DeleteBuffer(dequeuedBuffer);
+
+                            // maybe check for errors here?
+                            ++releasedTotal;
+                        }
+                            
                     }
                 }
             }
@@ -825,6 +847,7 @@ namespace OALEngine
                         AL.BufferData(soundBuffer, GetSoundFormat(AudioFile.WaveFormat.Channels, AudioFile.WaveFormat.BitsPerSample), sound_data, sound_data.Length, AudioFile.WaveFormat.SampleRate);
 
                         AL.SourceQueueBuffer(sources[i].id, soundBuffer);
+                        ++bufferedTotal;
                     }
                 }
             }
