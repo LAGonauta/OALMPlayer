@@ -370,17 +370,17 @@ namespace OpenAL_Music_Player
                     {
                         if (!music.IsPlaying)
                         {
-                            var currentTime = music.CurrentTime;
-                            if (currentTime < music.TotalTime && currentTime != 0)
-                            {
-                                var tempTime = music.CurrentTime;
-                                music.Play();
-                                music.CurrentTime = tempTime;
-                            }
-                            else
-                            {
+                            //var currentTime = music.CurrentTime;
+                            //if (currentTime < music.TotalTime && currentTime != 0)
+                            //{
+                            //    var tempTime = music.CurrentTime;
+                            //    music.Play();
+                            //    music.CurrentTime = tempTime;
+                            //}
+                            //else
+                            //{
                                 this.NextTrack();
-                            }
+                            //}
                         }
                     }
 
@@ -417,9 +417,7 @@ namespace OpenAL_Music_Player
                     this.TimerDisable();
                     
                     if (music != null)
-                    {
                         music.Dispose();
-                    }
                     
                     music = new OpenALSoundEffect(musicList[currentMusic], ref alengine, true);
                     trackTotalTime = music.TotalTime;
@@ -435,9 +433,7 @@ namespace OpenAL_Music_Player
 
                 case PlayerState.StopPlayback:
                     if (music != null)
-                    {
                         music.Dispose();
-                    }
 
                     currentState = PlayerState.Stopped;
                     lastState = PlayerState.StopPlayback;
