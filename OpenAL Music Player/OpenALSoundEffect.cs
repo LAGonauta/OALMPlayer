@@ -33,7 +33,7 @@ namespace OALEngine
 
         // streaming support
         const int streamingBufferTime = 1000; // in milliseconds
-        int streamingBufferQueueSize = 10;
+        int streamingBufferQueueSize = 100;
         int streamingBufferSize;
         Timer streamingTimer;
         Timer streamingCurrentTimeTimer;
@@ -355,6 +355,7 @@ namespace OALEngine
                                 }
                             }
 
+                            bufferList.Clear();
                             Trace.WriteLine("Disposed.");
                         }
                     }

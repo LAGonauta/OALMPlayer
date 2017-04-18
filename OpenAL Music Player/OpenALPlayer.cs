@@ -104,7 +104,8 @@ namespace OpenAL_Music_Player
             set
             {
                 volumePercentage = value;
-                volume = 0.0031623f * (float)Math.Exp(volumePercentage / 100 * 5.757f);
+                //volume = 0.0031623f * (float)Math.Exp(volumePercentage / 100 * 5.757f);
+                volume = (float)Math.Pow(volumePercentage / 100, 3);
                 currentState = PlayerState.ChangingVolume;
                 this.Now();
             }
