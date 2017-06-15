@@ -1,0 +1,3 @@
+[submodule "MiniTK"]
+	path = MiniTK
+	url = https://github.com/LAGonauta/MiniTK
