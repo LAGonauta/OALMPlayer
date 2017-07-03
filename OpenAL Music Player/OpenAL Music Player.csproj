@@ -130,6 +130,7 @@
     </Compile>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="NVorbisSource.cs" />
     <Compile Include="OpenALEngine.cs" />
     <Compile Include="OpenALPlayer.cs" />
     <Compile Include="OpenALSoundEffect.cs" />
