@@ -104,14 +104,7 @@ namespace OpenAL_Music_Player
       }
 
       // Starting audio thread
-      if (useObjectOrientedMethod)
-      {
-        openal_thread = new Thread(new ThreadStart(OpenALThread2));
-      }
-      else
-      {
-        openal_thread = new Thread(new ThreadStart(OpenALThread));
-      }
+      openal_thread = new Thread(() => OpenALThread(useObjectOrientedMethod));
       openal_thread.Start();
 
       // Starting CPU usage timer
@@ -170,428 +163,430 @@ namespace OpenAL_Music_Player
     public static bool effects_enabled = false;
     public static bool pitch_shift_enabled = false;
 
-    public void OpenALThread2()
+    public void OpenALThread(bool use_oo = false)
     {
-      AllPlaybackDevices = AudioContext.AvailableDevices;
-      DeviceChoice.Dispatcher.Invoke(new UpdateDeviceListCallBack(this.UpdateDeviceList));
-
-      oalPlayer = new OpenALPlayer(filePaths, last_selected_device);
-    }
-
-    public void OpenALThread()
-    {
-      //Register the new codec.
-      CodecFactory.Instance.Register("ogg-vorbis", new CodecFactoryEntry(s => new NVorbisSource(s).ToWaveSource(), ".ogg"));
-
-      OpenTK.Audio.OpenAL.ALError oal_error;
-      string information_text;
-      float music_current_time = 0;
-
-      oal_error = AL.GetError();
-      if (oal_error != ALError.NoError)
+      if (use_oo)
       {
-        DebugTrace("Error starting oal error (yeah)" + oal_error);
+        AllPlaybackDevices = AudioContext.AvailableDevices;
+        DeviceChoice.Dispatcher.Invoke(new UpdateDeviceListCallBack(this.UpdateDeviceList));
+
+        oalPlayer = new OpenALPlayer(filePaths, last_selected_device);
       }
-
-      AllPlaybackDevices = AudioContext.AvailableDevices;
-      DeviceChoice.Dispatcher.Invoke(new UpdateDeviceListCallBack(this.UpdateDeviceList));
-
-      // Setting up OpenAL stuff
-      DebugTrace("Setting up OpenAL playback");
-
-      AudioContext ac = new AudioContext(last_selected_device, 48000, 0, false, true, AudioContext.MaxAuxiliarySends.One);
-      XRamExtension XRam = new XRamExtension();
-
-      if (AL.Get(ALGetString.Renderer).IndexOf("X-Fi") != -1)
-        IsXFi = true;
-
-      if (AL.IsExtensionPresent("AL_EXT_float32"))
-        float_support = true;
-
-      DebugTrace("Renderer: " + AL.Get(ALGetString.Renderer));
-
-      // EFX
-      var EFX = new EffectsExtension();
-      int effect = EFX.GenEffect();
-      int filter = EFX.GenFilter();
-      int slot = EFX.GenAuxiliaryEffectSlot();
-
-      oal_error = AL.GetError();
-      if (oal_error != ALError.NoError)
+      else
       {
-        DebugTrace("Error generating effects: " + oal_error);
-      }
+        //Register the new codec.
+        CodecFactory.Instance.Register("ogg-vorbis", new CodecFactoryEntry(s => new NVorbisSource(s).ToWaveSource(), ".ogg"));
 
-      if (IsXFi)
-      {
-        // Is XRam available?
-        if (XRam.GetRamSize > 0) { xram_available = true; }
+        OpenTK.Audio.OpenAL.ALError oal_error;
+        string information_text;
+        float music_current_time = 0;
 
         oal_error = AL.GetError();
         if (oal_error != ALError.NoError)
         {
-          DebugTrace("XRam not available: " + oal_error);
+          DebugTrace("Error starting oal error (yeah)" + oal_error);
         }
-      }
 
-      // Setting up buffers
-      DebugTrace("Setting up buffers");
-      int buffer = 0;
-      int source = 0;
+        AllPlaybackDevices = AudioContext.AvailableDevices;
+        DeviceChoice.Dispatcher.Invoke(new UpdateDeviceListCallBack(this.UpdateDeviceList));
 
-      // Need to change to last used effect, or null effect.
-      if (IsXFi)
-      {
-        // Generating effects
-        EFX.BindEffect(effect, EfxEffectType.PitchShifter);
+        // Setting up OpenAL stuff
+        DebugTrace("Setting up OpenAL playback");
 
-        // Generating filter
-        EFX.Filter(filter, EfxFilteri.FilterType, (int)EfxFilterType.Lowpass);
+        AudioContext ac = new AudioContext(last_selected_device, 48000, 0, false, true, AudioContext.MaxAuxiliarySends.One);
+        XRamExtension XRam = new XRamExtension();
+
+        if (AL.Get(ALGetString.Renderer).IndexOf("X-Fi") != -1)
+          IsXFi = true;
+
+        if (AL.IsExtensionPresent("AL_EXT_float32"))
+          float_support = true;
+
+        DebugTrace("Renderer: " + AL.Get(ALGetString.Renderer));
+
+        // EFX
+        var EFX = new EffectsExtension();
+        int effect = EFX.GenEffect();
+        int filter = EFX.GenFilter();
+        int slot = EFX.GenAuxiliaryEffectSlot();
 
         oal_error = AL.GetError();
         if (oal_error != ALError.NoError)
         {
-          DebugTrace("Failed when generating effects: " + oal_error);
+          DebugTrace("Error generating effects: " + oal_error);
         }
-      }
 
-      // Default speed
-      int[] pitch_correction = PitchCorrection(playback_speed);
-
-      #region Playback
-      while (playbackthread_enabled)
-      {
-        Thread.Sleep(250);
-        while (is_playing)
+        if (IsXFi)
         {
-          #region Buffer
-          // Generating sources
-          DebugTrace("Generating source");
-          source = AL.GenSource();
+          // Is XRam available?
+          if (XRam.GetRamSize > 0) { xram_available = true; }
 
           oal_error = AL.GetError();
           if (oal_error != ALError.NoError)
           {
-            DebugTrace("Failed to generate source: " + oal_error);
+            DebugTrace("XRam not available: " + oal_error);
           }
+        }
 
-          // Setting up buffers
-          DebugTrace("Setting up buffer");
-          buffer = AL.GenBuffer();
+        // Setting up buffers
+        DebugTrace("Setting up buffers");
+        int buffer = 0;
+        int source = 0;
+
+        // Need to change to last used effect, or null effect.
+        if (IsXFi)
+        {
+          // Generating effects
+          EFX.BindEffect(effect, EfxEffectType.PitchShifter);
+
+          // Generating filter
+          EFX.Filter(filter, EfxFilteri.FilterType, (int)EfxFilterType.Lowpass);
+
           oal_error = AL.GetError();
           if (oal_error != ALError.NoError)
           {
-            DebugTrace("Failed to generate buffer: " + oal_error);
+            DebugTrace("Failed when generating effects: " + oal_error);
           }
+        }
 
-          TimeSpan total_time = ExtensionMethods.ToTimeSpan(0); // Some files never send stop commands for some reason, let's do it manually. (only needed on driver 2.40+)
-          DebugTrace("Carregando...");
+        // Default speed
+        int[] pitch_correction = PitchCorrection(playback_speed);
 
-          IWaveSource AudioFile;
-
-          try
+        #region Playback
+        while (playbackthread_enabled)
+        {
+          Thread.Sleep(250);
+          while (is_playing)
           {
-            AudioFile = CodecFactory.Instance.GetCodec(filePaths[file_number]);
-          }
-          catch (Exception)
-          {
-            DebugTrace("No file to load.");
-            break;
-          }
+            #region Buffer
+            // Generating sources
+            DebugTrace("Generating source");
+            source = AL.GenSource();
 
-          if (IsXFi && AudioFile.WaveFormat.WaveFormatTag == AudioEncoding.IeeeFloat)
-          {
-            var toSample = AudioFile.ToSampleSource();
-            if (AudioFile.WaveFormat.BitsPerSample == 32)
+            oal_error = AL.GetError();
+            if (oal_error != ALError.NoError)
             {
-              AudioFile = new SampleToPcm32(toSample);
+              DebugTrace("Failed to generate source: " + oal_error);
             }
-            else if (AudioFile.WaveFormat.BitsPerSample == 16)
+
+            // Setting up buffers
+            DebugTrace("Setting up buffer");
+            buffer = AL.GenBuffer();
+            oal_error = AL.GetError();
+            if (oal_error != ALError.NoError)
             {
-              AudioFile = new SampleToPcm16(toSample);
+              DebugTrace("Failed to generate buffer: " + oal_error);
+            }
+
+            TimeSpan total_time = ExtensionMethods.ToTimeSpan(0); // Some files never send stop commands for some reason, let's do it manually. (only needed on driver 2.40+)
+            DebugTrace("Carregando...");
+
+            IWaveSource AudioFile;
+
+            try
+            {
+              AudioFile = CodecFactory.Instance.GetCodec(filePaths[file_number]);
+            }
+            catch (Exception)
+            {
+              DebugTrace("No file to load.");
+              break;
+            }
+
+            if (IsXFi && AudioFile.WaveFormat.WaveFormatTag == AudioEncoding.IeeeFloat)
+            {
+              var toSample = AudioFile.ToSampleSource();
+              if (AudioFile.WaveFormat.BitsPerSample == 32)
+              {
+                AudioFile = new SampleToPcm32(toSample);
+              }
+              else if (AudioFile.WaveFormat.BitsPerSample == 16)
+              {
+                AudioFile = new SampleToPcm16(toSample);
+              }
+              else
+              {
+                AudioFile = new SampleToPcm8(toSample);
+              }
+            }
+
+            total_time = new TimeSpan(0, 0, (int)(AudioFile.Length * sizeof(byte) / AudioFile.WaveFormat.BytesPerSecond));
+
+            ALFormat sound_format;
+            try
+            {
+              sound_format = GetSoundFormat(AudioFile.WaveFormat.Channels, AudioFile.WaveFormat.BitsPerSample, float_support);
+            }
+            catch
+            {
+              DebugTrace("Invalid file format.");
+              break;
+            }
+
+            byte[] sound_data = new byte[AudioFile.Length];
+            try
+            {
+              AudioFile.Read(sound_data, 0, sound_data.Length);
+            }
+            catch
+            {
+              DebugTrace("Unable to read file.");
+              break;
+            }
+
+            AudioFile.Dispose();
+
+            AL.BufferData(buffer, sound_format, sound_data, sound_data.Length, AudioFile.WaveFormat.SampleRate);
+            sound_data = null;
+
+            oal_error = AL.GetError();
+            if (oal_error != ALError.NoError)
+            {
+              DebugTrace("Buffering error: " + oal_error);
+            }
+            #endregion
+
+            DebugTrace("Setting source: ");
+
+            AL.Source(source, ALSourcei.Buffer, buffer);
+
+            oal_error = AL.GetError();
+            if (oal_error != ALError.NoError)
+            {
+              DebugTrace("Source binding error: " + oal_error);
+            }
+
+            if (IsXFi)
+            {
+              // Binding effects
+              EFX.BindSourceToAuxiliarySlot(source, slot, 0, 0);
+              DebugTrace("Binding effect");
+            }
+
+            // Correcting gain to match last played file
+            AL.Source(source, ALSourcef.Gain, volume);
+
+            // Correcting effect and filter to match last played file
+            if (Math.Truncate(playback_speed * 100) == 100)
+            {
+              if (IsXFi)
+              {
+                // Reset effect
+                EFX.Effect(effect, EfxEffecti.PitchShifterCoarseTune, 0);
+                EFX.Effect(effect, EfxEffecti.PitchShifterFineTune, 0);
+
+                if (!pitch_shift_enabled)
+                {
+                  // Disable filter
+                  EFX.Filter(filter, EfxFilterf.LowpassGain, 1f);
+                  EFX.BindFilterToSource(source, filter);
+
+                  // Disable effect
+                  EFX.AuxiliaryEffectSlot(slot, EfxAuxiliaryi.EffectslotEffect, (int)EfxEffectType.Null);
+                }
+              }
+
+              // Changing pitch
+              AL.Source(source, ALSourcef.Pitch, 1f);
             }
             else
             {
-              AudioFile = new SampleToPcm8(toSample);
-            }
-          }
-
-          total_time = new TimeSpan(0, 0, (int)(AudioFile.Length * sizeof(byte) / AudioFile.WaveFormat.BytesPerSecond));
-
-          ALFormat sound_format;
-          try
-          {
-            sound_format = GetSoundFormat(AudioFile.WaveFormat.Channels, AudioFile.WaveFormat.BitsPerSample, float_support);
-          }
-          catch
-          {
-            DebugTrace("Invalid file format.");
-            break;
-          }
-
-          byte[] sound_data = new byte[AudioFile.Length];
-          try
-          {
-            AudioFile.Read(sound_data, 0, sound_data.Length);
-          }
-          catch
-          {
-            DebugTrace("Unable to read file.");
-            break;
-          }
-
-          AudioFile.Dispose();
-
-          AL.BufferData(buffer, sound_format, sound_data, sound_data.Length, AudioFile.WaveFormat.SampleRate);
-          sound_data = null;
-
-          oal_error = AL.GetError();
-          if (oal_error != ALError.NoError)
-          {
-            DebugTrace("Buffering error: " + oal_error);
-          }
-          #endregion
-
-          DebugTrace("Setting source: ");
-
-          AL.Source(source, ALSourcei.Buffer, buffer);
-
-          oal_error = AL.GetError();
-          if (oal_error != ALError.NoError)
-          {
-            DebugTrace("Source binding error: " + oal_error);
-          }
-
-          if (IsXFi)
-          {
-            // Binding effects
-            EFX.BindSourceToAuxiliarySlot(source, slot, 0, 0);
-            DebugTrace("Binding effect");
-          }
-
-          // Correcting gain to match last played file
-          AL.Source(source, ALSourcef.Gain, volume);
-
-          // Correcting effect and filter to match last played file
-          if (Math.Truncate(playback_speed * 100) == 100)
-          {
-            if (IsXFi)
-            {
-              // Reset effect
-              EFX.Effect(effect, EfxEffecti.PitchShifterCoarseTune, 0);
-              EFX.Effect(effect, EfxEffecti.PitchShifterFineTune, 0);
-
-              if (!pitch_shift_enabled)
+              if (IsXFi && pitch_shift_enabled)
               {
-                // Disable filter
-                EFX.Filter(filter, EfxFilterf.LowpassGain, 1f);
+                // Changing effect
+                EFX.Effect(effect, EfxEffecti.PitchShifterCoarseTune, pitch_correction[0]);
+                EFX.Effect(effect, EfxEffecti.PitchShifterFineTune, pitch_correction[1]);
+                EFX.AuxiliaryEffectSlot(slot, EfxAuxiliaryi.EffectslotEffect, effect);
+
+                // Changing filter
+                EFX.Filter(filter, EfxFilterf.LowpassGain, 0f); // To disable direct sound and leave only the effect
                 EFX.BindFilterToSource(source, filter);
-
-                // Disable effect
-                EFX.AuxiliaryEffectSlot(slot, EfxAuxiliaryi.EffectslotEffect, (int)EfxEffectType.Null);
-              }
-            }
-
-            // Changing pitch
-            AL.Source(source, ALSourcef.Pitch, 1f);
-          }
-          else
-          {
-            if (IsXFi && pitch_shift_enabled)
-            {
-              // Changing effect
-              EFX.Effect(effect, EfxEffecti.PitchShifterCoarseTune, pitch_correction[0]);
-              EFX.Effect(effect, EfxEffecti.PitchShifterFineTune, pitch_correction[1]);
-              EFX.AuxiliaryEffectSlot(slot, EfxAuxiliaryi.EffectslotEffect, effect);
-
-              // Changing filter
-              EFX.Filter(filter, EfxFilterf.LowpassGain, 0f); // To disable direct sound and leave only the effect
-              EFX.BindFilterToSource(source, filter);
-            }
-
-            // Change source speed
-            AL.Source(source, ALSourcef.Pitch, playback_speed);
-          }
-
-          AL.SourcePlay(source);
-
-          oal_error = AL.GetError();
-          if (oal_error != ALError.NoError)
-          {
-            DebugTrace("Unable to play source: " + oal_error);
-            break;
-          }
-
-          decimal total_time_seconds = ExtensionMethods.ToDecimal(total_time);
-
-          #region Playback
-          while (AL.GetSourceState(source) == ALSourceState.Playing || AL.GetSourceState(source) == ALSourceState.Paused) // We want to wait until application exit
-          {
-            Thread.Sleep(update_time_ms);
-
-            if (pause_change)
-            {
-              if (paused)
-              {
-                AL.SourcePause(source);
-                pause_change = false;
-              }
-              else
-              {
-                AL.SourcePlay(source);
-                pause_change = false;
-              }
-            }
-
-            if (mudando_velocidade)
-            {
-              if (Math.Truncate(playback_speed * 100) == 100)
-              {
-                if (IsXFi)
-                {
-                  // Reset effect
-                  EFX.Effect(effect, EfxEffecti.PitchShifterCoarseTune, 0);
-                  EFX.Effect(effect, EfxEffecti.PitchShifterFineTune, 0);
-
-                  if (!pitch_shift_enabled)
-                  {
-                    // Disable filter
-                    EFX.Filter(filter, EfxFilterf.LowpassGain, 1f);
-                    EFX.BindFilterToSource(source, filter);
-
-                    // Disable effect
-                    EFX.AuxiliaryEffectSlot(slot, EfxAuxiliaryi.EffectslotEffect, (int)EfxEffectType.Null);
-                  }
-                }
-
-                // Changing pitch
-                AL.Source(source, ALSourcef.Pitch, 1f);
-              }
-              else
-              {
-                if (IsXFi)
-                {
-                  if (pitch_shift_enabled)
-                  {
-                    // Changing effect
-                    pitch_correction = PitchCorrection(playback_speed);
-                    EFX.Effect(effect, EfxEffecti.PitchShifterCoarseTune, pitch_correction[0]);
-                    EFX.Effect(effect, EfxEffecti.PitchShifterFineTune, pitch_correction[1]);
-                    EFX.AuxiliaryEffectSlot(slot, EfxAuxiliaryi.EffectslotEffect, effect);
-
-                    // Changing filter
-                    EFX.Filter(filter, EfxFilterf.LowpassGain, 0f); // To disable direct sound and leave only the effect
-                    EFX.BindFilterToSource(source, filter);
-                  }
-                  else
-                  {
-                    // Disable filter
-                    EFX.Filter(filter, EfxFilterf.LowpassGain, 1f);
-                    EFX.BindFilterToSource(source, filter);
-
-                    // Disable effect
-                    EFX.AuxiliaryEffectSlot(slot, EfxAuxiliaryi.EffectslotEffect, (int)EfxEffectType.Null);
-                  }
-                }
-
-                // Change source speed
-                AL.Source(source, ALSourcef.Pitch, playback_speed);
               }
 
-              mudando_velocidade = false;
+              // Change source speed
+              AL.Source(source, ALSourcef.Pitch, playback_speed);
             }
 
-            // Change volume
-            if (mudando_volume)
-            {
-              AL.Source(source, ALSourcef.Gain, volume);
-              mudando_volume = false;
-            }
+            AL.SourcePlay(source);
 
-            if (change_file)
+            oal_error = AL.GetError();
+            if (oal_error != ALError.NoError)
             {
+              DebugTrace("Unable to play source: " + oal_error);
               break;
             }
 
-            AL.GetSource(source, ALSourcef.SecOffset, out music_current_time);
-            // Needed on newer X-Fi drivers. I could also change the source to streaming, but with this we can be sure.
-            if ((int)music_current_time > total_time_seconds && IsXFi)
+            decimal total_time_seconds = ExtensionMethods.ToDecimal(total_time);
+
+            #region Playback
+            while (AL.GetSourceState(source) == ALSourceState.Playing || AL.GetSourceState(source) == ALSourceState.Paused) // We want to wait until application exit
             {
+              Thread.Sleep(update_time_ms);
+
+              if (pause_change)
+              {
+                if (paused)
+                {
+                  AL.SourcePause(source);
+                  pause_change = false;
+                }
+                else
+                {
+                  AL.SourcePlay(source);
+                  pause_change = false;
+                }
+              }
+
+              if (mudando_velocidade)
+              {
+                if (Math.Truncate(playback_speed * 100) == 100)
+                {
+                  if (IsXFi)
+                  {
+                    // Reset effect
+                    EFX.Effect(effect, EfxEffecti.PitchShifterCoarseTune, 0);
+                    EFX.Effect(effect, EfxEffecti.PitchShifterFineTune, 0);
+
+                    if (!pitch_shift_enabled)
+                    {
+                      // Disable filter
+                      EFX.Filter(filter, EfxFilterf.LowpassGain, 1f);
+                      EFX.BindFilterToSource(source, filter);
+
+                      // Disable effect
+                      EFX.AuxiliaryEffectSlot(slot, EfxAuxiliaryi.EffectslotEffect, (int)EfxEffectType.Null);
+                    }
+                  }
+
+                  // Changing pitch
+                  AL.Source(source, ALSourcef.Pitch, 1f);
+                }
+                else
+                {
+                  if (IsXFi)
+                  {
+                    if (pitch_shift_enabled)
+                    {
+                      // Changing effect
+                      pitch_correction = PitchCorrection(playback_speed);
+                      EFX.Effect(effect, EfxEffecti.PitchShifterCoarseTune, pitch_correction[0]);
+                      EFX.Effect(effect, EfxEffecti.PitchShifterFineTune, pitch_correction[1]);
+                      EFX.AuxiliaryEffectSlot(slot, EfxAuxiliaryi.EffectslotEffect, effect);
+
+                      // Changing filter
+                      EFX.Filter(filter, EfxFilterf.LowpassGain, 0f); // To disable direct sound and leave only the effect
+                      EFX.BindFilterToSource(source, filter);
+                    }
+                    else
+                    {
+                      // Disable filter
+                      EFX.Filter(filter, EfxFilterf.LowpassGain, 1f);
+                      EFX.BindFilterToSource(source, filter);
+
+                      // Disable effect
+                      EFX.AuxiliaryEffectSlot(slot, EfxAuxiliaryi.EffectslotEffect, (int)EfxEffectType.Null);
+                    }
+                  }
+
+                  // Change source speed
+                  AL.Source(source, ALSourcef.Pitch, playback_speed);
+                }
+
+                mudando_velocidade = false;
+              }
+
+              // Change volume
+              if (mudando_volume)
+              {
+                AL.Source(source, ALSourcef.Gain, volume);
+                mudando_volume = false;
+              }
+
+              if (change_file)
+              {
+                break;
+              }
+
+              AL.GetSource(source, ALSourcef.SecOffset, out music_current_time);
+              // Needed on newer X-Fi drivers. I could also change the source to streaming, but with this we can be sure.
+              if ((int)music_current_time > total_time_seconds && IsXFi)
+              {
+                break;
+              }
+
+              information_text = ("Música atual: " + (file_number + 1)) + Environment.NewLine +
+                  ("Posição: " + (int)music_current_time + "s/" + total_time_seconds + "s") + Environment.NewLine +
+                  ("Volume: " + (int)(double_volume) + "%") + Environment.NewLine +
+                  ("Velocidade: " + (int)(playback_speed * 100) + "%");
+
+              if (xram_available)
+              {
+                information_text = information_text + Environment.NewLine + ("XRam livre: " + (XRam.GetRamFree / (1024.0 * 1024)).ToString("0.00") + "MB");
+              }
+
+              infoText.Dispatcher.Invoke(new UpdateinfoTextCallback(this.UpdateinfoText), new object[] { information_text });
+            }
+            #endregion
+
+            music_current_time = 0;
+
+            DebugTrace("Stopping source");
+
+            AL.SourceStop(source);
+
+            oal_error = AL.GetError();
+            if (oal_error != ALError.NoError)
+            {
+              DebugTrace("Unable to stop source: " + oal_error);
               break;
             }
 
-            information_text = ("Música atual: " + (file_number + 1)) + Environment.NewLine +
-                ("Posição: " + (int)music_current_time + "s/" + total_time_seconds + "s") + Environment.NewLine +
-                ("Volume: " + (int)(double_volume) + "%") + Environment.NewLine +
-                ("Velocidade: " + (int)(playback_speed * 100) + "%");
+            // Deleting source and buffer
+            AL.DeleteSource(source);
 
-            if (xram_available)
+            oal_error = AL.GetError();
+            if (oal_error != ALError.NoError)
             {
-              information_text = information_text + Environment.NewLine + ("XRam livre: " + (XRam.GetRamFree / (1024.0 * 1024)).ToString("0.00") + "MB");
+              DebugTrace("Unable to delete source: " + oal_error);
             }
 
-            infoText.Dispatcher.Invoke(new UpdateinfoTextCallback(this.UpdateinfoText), new object[] { information_text });
-          }
-          #endregion
+            AL.DeleteBuffer(buffer);
 
-          music_current_time = 0;
+            oal_error = AL.GetError();
+            if (oal_error != ALError.NoError)
+            {
+              DebugTrace("Unable to delete buffer: " + oal_error);
+            }
 
-          DebugTrace("Stopping source");
-
-          AL.SourceStop(source);
-
-          oal_error = AL.GetError();
-          if (oal_error != ALError.NoError)
-          {
-            DebugTrace("Unable to stop source: " + oal_error);
-            break;
-          }
-
-          // Deleting source and buffer
-          AL.DeleteSource(source);
-
-          oal_error = AL.GetError();
-          if (oal_error != ALError.NoError)
-          {
-            DebugTrace("Unable to delete source: " + oal_error);
-          }
-
-          AL.DeleteBuffer(buffer);
-
-          oal_error = AL.GetError();
-          if (oal_error != ALError.NoError)
-          {
-            DebugTrace("Unable to delete buffer: " + oal_error);
-          }
-
-          if (file_number == (filePaths.Length - 1) && !change_file)
-          {
-            // Restart playback.
-            file_number = 0;
-          }
-          else if (change_file)
-          {
-            change_file = false;
-            break;
-          }
-          else
-          {
-            file_number++;
+            if (file_number == (filePaths.Length - 1) && !change_file)
+            {
+              // Restart playback.
+              file_number = 0;
+            }
+            else if (change_file)
+            {
+              change_file = false;
+              break;
+            }
+            else
+            {
+              file_number++;
+            }
           }
         }
+        #endregion
+
+        EFX.DeleteAuxiliaryEffectSlot(slot);
+        EFX.DeleteEffect(effect);
+        EFX.DeleteFilter(filter);
+        AL.DeleteSource(source);
+        AL.DeleteBuffer(buffer);
+        ac.Dispose(); // Cleaning context
+
+        DebugTrace("Disposing context");
+
+        return; 
       }
-      #endregion
-
-      EFX.DeleteAuxiliaryEffectSlot(slot);
-      EFX.DeleteEffect(effect);
-      EFX.DeleteFilter(filter);
-      AL.DeleteSource(source);
-      AL.DeleteBuffer(buffer);
-      ac.Dispose(); // Cleaning context
-
-      DebugTrace("Disposing context");
-
-      return;
     }
     #endregion
 
