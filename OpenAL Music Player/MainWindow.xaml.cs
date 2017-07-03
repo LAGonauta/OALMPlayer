@@ -54,7 +54,6 @@ namespace OpenAL_Music_Player
     // Device selection initialization
     string last_selected_device = "";
     string config_file = "oalminerva.ini";
-    bool first_selection = true;
 
     // Multithreaded controls
     public static bool playbackthread_enabled = true;
@@ -170,7 +169,8 @@ namespace OpenAL_Music_Player
         AllPlaybackDevices = AudioContext.AvailableDevices;
         DeviceChoice.Dispatcher.Invoke(new UpdateDeviceListCallBack(this.UpdateDeviceList));
 
-        oalPlayer = new OpenALPlayer(filePaths, last_selected_device);
+        // The player is generated on the selection changed handler
+        //oalPlayer = new OpenALPlayer(filePaths, last_selected_device);
       }
       else
       {
@@ -585,7 +585,7 @@ namespace OpenAL_Music_Player
 
         DebugTrace("Disposing context");
 
-        return; 
+        return;
       }
     }
     #endregion
@@ -854,43 +854,40 @@ namespace OpenAL_Music_Player
 
     private void UpdateDeviceList()
     {
-      if (last_selected_device != null)
+      if (last_selected_device != null && AllPlaybackDevices.Contains(last_selected_device))
       {
-        DeviceChoice.Items.Add(last_selected_device + " (Current)");
-      }
+        DeviceChoice.Items.Add(last_selected_device);
 
+        foreach (string s in AllPlaybackDevices)
+        {
+          if (s != last_selected_device)
+          {
+            DeviceChoice.Items.Add(s);
+          }
+        }
+      }
+      else
       {
         foreach (string s in AllPlaybackDevices)
+        {
           DeviceChoice.Items.Add(s);
+        }
+      }
+
+      if (DeviceChoice.Items.Count > 0)
+      {
+        DeviceChoice.SelectedIndex = 0;
       }
     }
 
     private void DeviceChoice_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-      if (first_selection)
+      File.WriteAllText(config_file, (string)DeviceChoice.SelectedValue);
+      if (oalPlayer != null)
       {
-        first_selection = false;
+        oalPlayer.Dispose();
       }
-      else
-      {
-        if (File.Exists(config_file))
-        {
-          if (DeviceChoice.SelectedIndex != 1)
-          {
-            File.WriteAllText(config_file, (string)DeviceChoice.SelectedValue);
-            System.Windows.MessageBox.Show("Please restart to load the new device", "Restart required");
-          }
-          else
-          {
-            System.Windows.MessageBox.Show("Please select other device", "Invalid option");
-          }
-        }
-        else
-        {
-          File.WriteAllText(config_file, (string)DeviceChoice.SelectedValue);
-          System.Windows.MessageBox.Show("Please restart to load the new device", "Restart required");
-        }
-      }
+      oalPlayer = new OpenALPlayer(filePaths, (string)DeviceChoice.SelectedValue);
     }
 
     private void Window_Closing(object sender, EventArgs e)
@@ -1108,7 +1105,7 @@ namespace OpenAL_Music_Player
     private void DebugTrace(string message)
     {
 #if DEBUG
-            Trace.WriteLine(message); 
+      Trace.WriteLine(message);
 #endif
     }
   }
