@@ -413,6 +413,25 @@ namespace OpenAL_Music_Player
         InfoText.Interval = (int)e.NewValue;
     }
 
+    private void repeatRadioButtons_checked(object sender, RoutedEventArgs e)
+    {
+      if (oalPlayer != null)
+      {
+        if (sender == radioRepeatAll)
+        {
+          oalPlayer.RepeatSetting = OpenALPlayer.repeatType.All;
+        }
+        else if (sender == radioRepeatSong)
+        {
+          oalPlayer.RepeatSetting = OpenALPlayer.repeatType.Song;
+        }
+        else if (sender == radioRepeatNone)
+        {
+          oalPlayer.RepeatSetting = OpenALPlayer.repeatType.No;
+        } 
+      }
+    }
+
     private void DebugTrace(string message)
     {
 #if DEBUG

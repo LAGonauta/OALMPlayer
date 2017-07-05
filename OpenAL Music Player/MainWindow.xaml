@@ -154,9 +154,9 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
-                                <RadioButton x:Name="radioRepeatNone" Grid.Column="0" Content="No" HorizontalAlignment="Left" VerticalAlignment="Center"/>
-                                <RadioButton x:Name="radioRepeatSong" Grid.Column="1" Content="Song" HorizontalAlignment="Left" VerticalAlignment="Center"/>
-                                <RadioButton x:Name="radioRepeatAll" Grid.Column="2" Content="All" HorizontalAlignment="Left" VerticalAlignment="Center" IsChecked="True"/>
+                                <RadioButton x:Name="radioRepeatNone" Grid.Column="0" Content="No" HorizontalAlignment="Center" VerticalAlignment="Center" Checked="repeatRadioButtons_checked"/>
+                                <RadioButton x:Name="radioRepeatSong" Grid.Column="1" Content="Song" HorizontalAlignment="Center" VerticalAlignment="Center" Checked="repeatRadioButtons_checked"/>
+                                <RadioButton x:Name="radioRepeatAll" Grid.Column="2" Content="All" HorizontalAlignment="Center" VerticalAlignment="Center" IsChecked="True" Checked="repeatRadioButtons_checked"/>
                             </Grid>
                         </GroupBox>
 

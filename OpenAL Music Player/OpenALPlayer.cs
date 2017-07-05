@@ -34,6 +34,9 @@ namespace OpenAL_Music_Player
     float volume = 1f;
     float pitch = 1f;
 
+    // Repeat
+    repeatType repeat_setting = repeatType.All;
+
     // sound "effect"
     OpenALSoundEffect music;
 
@@ -42,6 +45,19 @@ namespace OpenAL_Music_Player
     #endregion
 
     #region Properties
+    public repeatType RepeatSetting
+    {
+      get
+      {
+        return repeat_setting;
+      }
+
+      set
+      {
+        repeat_setting = value;
+      }
+    }
+
     /// <summary>
     /// Time in ms between each update of the player
     /// </summary>
@@ -287,10 +303,38 @@ namespace OpenAL_Music_Player
       this.Now();
     }
 
-    public void NextTrack()
+    public void NextTrack(bool force_next = true)
     {
-      currentMusic = (currentMusic + 1) % musicList.Count;
-      currentState = PlayerState.ChangingTrack;
+      if (force_next)
+      {
+        currentMusic = (currentMusic + 1) % musicList.Count;
+        currentState = PlayerState.ChangingTrack;
+      }
+      else
+      {
+        if (repeat_setting == repeatType.All)
+        {
+          currentMusic = (currentMusic + 1) % musicList.Count;
+          currentState = PlayerState.ChangingTrack;
+        }
+        else if (repeat_setting == repeatType.Song)
+        {
+          currentState = PlayerState.ChangingTrack;
+        }
+        else if (repeat_setting == repeatType.No)
+        {
+          if (currentMusic + 1 == musicList.Count)
+          {
+            currentState = PlayerState.StopPlayback;
+          }
+          else
+          {
+            currentMusic = (currentMusic + 1) % musicList.Count;
+            currentState = PlayerState.ChangingTrack;
+          }
+        }
+      }
+
       this.Now();
     }
 
@@ -371,17 +415,7 @@ namespace OpenAL_Music_Player
           {
             if (!music.IsPlaying)
             {
-              //var currentTime = music.CurrentTime;
-              //if (currentTime < music.TotalTime && currentTime != 0)
-              //{
-              //    var tempTime = music.CurrentTime;
-              //    music.Play();
-              //    music.CurrentTime = tempTime;
-              //}
-              //else
-              //{
-              this.NextTrack();
-              //}
+              this.NextTrack(false);
             }
           }
 
@@ -463,7 +497,7 @@ namespace OpenAL_Music_Player
     #endregion
 
     #region Enumerations
-    public enum PlayerState
+    public enum PlayerState : byte
     {
       Stopped,
       StartPlayback,
@@ -476,6 +510,13 @@ namespace OpenAL_Music_Player
       ChangingTimer,
       ChangingVolume,
       ChangingPitch
+    };
+
+    public enum repeatType : byte
+    {
+      No,
+      Song,
+      All
     };
     #endregion
   }
