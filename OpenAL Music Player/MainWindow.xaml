@@ -120,7 +120,7 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <Slider x:Name="audio_position_slider" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center" VerticalAlignment="Center" Grid.Column="0"/>
+                            <Slider x:Name="audio_position_slider" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center" VerticalAlignment="Center" Grid.Column="0" Maximum="1" TickFrequency="0.1" LargeChange="0.1" SmallChange="0.01"/>
                             <TextBlock x:Name="position_text_display" Text="0:00 / 0:00" HorizontalAlignment="Right" VerticalAlignment="Center" Grid.Column="1"></TextBlock>
                         </Grid>
 
@@ -199,10 +199,8 @@
                             <GroupBox.BorderBrush>
                                 <SolidColorBrush Color="{DynamicResource {x:Static SystemColors.ActiveBorderColorKey}}"/>
                             </GroupBox.BorderBrush>
-                            <Slider x:Name="ThreadTimeSlider" AutoToolTipPlacement="BottomRight" Maximum="1000" Value="150" Minimum="25" SmallChange="1" ToolTip="Default = 150 ms" LargeChange="100" ValueChanged="ThreadTimeSlider_ValueChanged"/>
+                            <Slider x:Name="ThreadTimeSlider" AutoToolTipPlacement="BottomRight" Maximum="1000" Value="150" Minimum="25" SmallChange="1" ToolTip="Default = 150 ms" LargeChange="100" ValueChanged="ThreadTimeSlider_ValueChanged" TickPlacement="BottomRight" TickFrequency="195"/>
                         </GroupBox>
-
-                        <TextBlock x:Name="infoText" Text="" Grid.Column="0" Grid.ColumnSpan="2" Grid.Row="4"/>
                     </StackPanel>
                     <Grid Grid.Column="1" Grid.Row="0" Grid.RowSpan="2" Width="1" Margin="5,0">
                         <Grid.Background>
@@ -211,7 +209,7 @@
                     </Grid>
                     <StackPanel Grid.Column="2" Grid.RowSpan="3">
                         <TextBlock Text="Volume (%)" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        <Slider Grid.Column="1" Value="100" ValueChanged="Slider_VolumeChanged" Maximum="100" LargeChange="10" SmallChange="2" Orientation="Vertical" Height="99" HorizontalContentAlignment="Center" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <Slider Grid.Column="1" Value="100" ValueChanged="Slider_VolumeChanged" Maximum="100" LargeChange="10" SmallChange="2" Orientation="Vertical" Height="99" HorizontalContentAlignment="Center" HorizontalAlignment="Center" VerticalAlignment="Center" TickFrequency="25" TickPlacement="TopLeft"/>
                         <TextBlock x:Name="volume_text_display" Text="100%" HorizontalAlignment="Center"/>
                         <Separator>
                             <Separator.Background>
@@ -219,7 +217,7 @@
                             </Separator.Background>
                         </Separator>
                         <TextBlock Text="Speed (%)" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        <Slider x:Name="SpeedSlider" Orientation="Vertical" HorizontalAlignment="Center" VerticalAlignment="Center" Height="99" Maximum="200" Value="100" ValueChanged="Slider_SpeedChanged" Minimum="0.01" SmallChange="1" LargeChange="10"/>
+                        <Slider x:Name="SpeedSlider" Orientation="Vertical" HorizontalAlignment="Center" VerticalAlignment="Center" Height="99" Maximum="2" Value="1" ValueChanged="Slider_SpeedChanged" Minimum="0.0001" SmallChange="0.01" LargeChange="0.10" TickFrequency="0.50" TickPlacement="TopLeft"/>
                         <TextBlock x:Name="speed_text_display" Text="100%" HorizontalAlignment="Center"/>
                     </StackPanel>
                 </Grid>

@@ -40,16 +40,11 @@ namespace OpenAL_Music_Player
 
     public bool xram_available = false;
 
-    // change this to use new system
-    bool useObjectOrientedMethod = true;
-
     // File control
     public static int file_number = 0;
 
     // Multithreaded delegated callback, so our gui is not stuck while playing sound
-    public delegate void UpdateTextCallback(string message);
     public delegate void UpdateDeviceListCallBack();
-    public delegate void UpdateinfoTextCallback(string message);
 
     // Device selection initialization
     string last_selected_device = "";
@@ -68,7 +63,6 @@ namespace OpenAL_Music_Player
     float total_cpu_usage;
 
     // Info text
-    string message;
     System.Windows.Forms.Timer InfoText;
 
     // Variable used when verifying if user closed the window (to clean up) 
@@ -103,7 +97,7 @@ namespace OpenAL_Music_Player
       }
 
       // Starting audio thread
-      openal_thread = new Thread(() => OpenALThread(useObjectOrientedMethod));
+      openal_thread = new Thread(() => OpenALThread());
       openal_thread.Start();
 
       // Starting CPU usage timer
@@ -133,16 +127,12 @@ namespace OpenAL_Music_Player
         items.Add(new playlistItemsList() { Title = (i + 1 + ". " + Path.GetFileName(filePaths[i])) });
       }
 
-      if (useObjectOrientedMethod)
-      {
-        List<string> mList = new List<string>();
+      List<string> mList = new List<string>();
 
-        foreach (string element in filePaths)
-          mList.Add(element);
+      foreach (string element in filePaths)
+        mList.Add(element);
 
-        oalPlayer.MusicList = mList;
-      }
-
+      oalPlayer.MusicList = mList;
     }
 
     #region OpenAL Stuff
@@ -162,431 +152,13 @@ namespace OpenAL_Music_Player
     public static bool effects_enabled = false;
     public static bool pitch_shift_enabled = false;
 
-    public void OpenALThread(bool use_oo = false)
+    public void OpenALThread()
     {
-      if (use_oo)
-      {
-        AllPlaybackDevices = AudioContext.AvailableDevices;
-        DeviceChoice.Dispatcher.Invoke(new UpdateDeviceListCallBack(this.UpdateDeviceList));
-
-        // The player is generated on the selection changed handler
-        //oalPlayer = new OpenALPlayer(filePaths, last_selected_device);
-      }
-      else
-      {
-        //Register the new codec.
-        CodecFactory.Instance.Register("ogg-vorbis", new CodecFactoryEntry(s => new NVorbisSource(s).ToWaveSource(), ".ogg"));
-
-        OpenTK.Audio.OpenAL.ALError oal_error;
-        string information_text;
-        float music_current_time = 0;
-
-        oal_error = AL.GetError();
-        if (oal_error != ALError.NoError)
-        {
-          DebugTrace("Error starting oal error (yeah)" + oal_error);
-        }
-
-        AllPlaybackDevices = AudioContext.AvailableDevices;
-        DeviceChoice.Dispatcher.Invoke(new UpdateDeviceListCallBack(this.UpdateDeviceList));
-
-        // Setting up OpenAL stuff
-        DebugTrace("Setting up OpenAL playback");
-
-        AudioContext ac = new AudioContext(last_selected_device, 48000, 0, false, true, AudioContext.MaxAuxiliarySends.One);
-        XRamExtension XRam = new XRamExtension();
-
-        if (AL.Get(ALGetString.Renderer).IndexOf("X-Fi") != -1)
-          IsXFi = true;
-
-        if (AL.IsExtensionPresent("AL_EXT_float32"))
-          float_support = true;
-
-        DebugTrace("Renderer: " + AL.Get(ALGetString.Renderer));
-
-        // EFX
-        var EFX = new EffectsExtension();
-        int effect = EFX.GenEffect();
-        int filter = EFX.GenFilter();
-        int slot = EFX.GenAuxiliaryEffectSlot();
-
-        oal_error = AL.GetError();
-        if (oal_error != ALError.NoError)
-        {
-          DebugTrace("Error generating effects: " + oal_error);
-        }
-
-        if (IsXFi)
-        {
-          // Is XRam available?
-          if (XRam.GetRamSize > 0) { xram_available = true; }
-
-          oal_error = AL.GetError();
-          if (oal_error != ALError.NoError)
-          {
-            DebugTrace("XRam not available: " + oal_error);
-          }
-        }
-
-        // Setting up buffers
-        DebugTrace("Setting up buffers");
-        int buffer = 0;
-        int source = 0;
-
-        // Need to change to last used effect, or null effect.
-        if (IsXFi)
-        {
-          // Generating effects
-          EFX.BindEffect(effect, EfxEffectType.PitchShifter);
-
-          // Generating filter
-          EFX.Filter(filter, EfxFilteri.FilterType, (int)EfxFilterType.Lowpass);
-
-          oal_error = AL.GetError();
-          if (oal_error != ALError.NoError)
-          {
-            DebugTrace("Failed when generating effects: " + oal_error);
-          }
-        }
-
-        // Default speed
-        int[] pitch_correction = PitchCorrection(playback_speed);
-
-        #region Playback
-        while (playbackthread_enabled)
-        {
-          Thread.Sleep(250);
-          while (is_playing)
-          {
-            #region Buffer
-            // Generating sources
-            DebugTrace("Generating source");
-            source = AL.GenSource();
-
-            oal_error = AL.GetError();
-            if (oal_error != ALError.NoError)
-            {
-              DebugTrace("Failed to generate source: " + oal_error);
-            }
-
-            // Setting up buffers
-            DebugTrace("Setting up buffer");
-            buffer = AL.GenBuffer();
-            oal_error = AL.GetError();
-            if (oal_error != ALError.NoError)
-            {
-              DebugTrace("Failed to generate buffer: " + oal_error);
-            }
-
-            TimeSpan total_time = ExtensionMethods.ToTimeSpan(0); // Some files never send stop commands for some reason, let's do it manually. (only needed on driver 2.40+)
-            DebugTrace("Carregando...");
-
-            IWaveSource AudioFile;
-
-            try
-            {
-              AudioFile = CodecFactory.Instance.GetCodec(filePaths[file_number]);
-            }
-            catch (Exception)
-            {
-              DebugTrace("No file to load.");
-              break;
-            }
-
-            if (IsXFi && AudioFile.WaveFormat.WaveFormatTag == AudioEncoding.IeeeFloat)
-            {
-              var toSample = AudioFile.ToSampleSource();
-              if (AudioFile.WaveFormat.BitsPerSample == 32)
-              {
-                AudioFile = new SampleToPcm32(toSample);
-              }
-              else if (AudioFile.WaveFormat.BitsPerSample == 16)
-              {
-                AudioFile = new SampleToPcm16(toSample);
-              }
-              else
-              {
-                AudioFile = new SampleToPcm8(toSample);
-              }
-            }
-
-            total_time = new TimeSpan(0, 0, (int)(AudioFile.Length * sizeof(byte) / AudioFile.WaveFormat.BytesPerSecond));
-
-            ALFormat sound_format;
-            try
-            {
-              sound_format = GetSoundFormat(AudioFile.WaveFormat.Channels, AudioFile.WaveFormat.BitsPerSample, float_support);
-            }
-            catch
-            {
-              DebugTrace("Invalid file format.");
-              break;
-            }
-
-            byte[] sound_data = new byte[AudioFile.Length];
-            try
-            {
-              AudioFile.Read(sound_data, 0, sound_data.Length);
-            }
-            catch
-            {
-              DebugTrace("Unable to read file.");
-              break;
-            }
-
-            AudioFile.Dispose();
-
-            AL.BufferData(buffer, sound_format, sound_data, sound_data.Length, AudioFile.WaveFormat.SampleRate);
-            sound_data = null;
-
-            oal_error = AL.GetError();
-            if (oal_error != ALError.NoError)
-            {
-              DebugTrace("Buffering error: " + oal_error);
-            }
-            #endregion
-
-            DebugTrace("Setting source: ");
-
-            AL.Source(source, ALSourcei.Buffer, buffer);
-
-            oal_error = AL.GetError();
-            if (oal_error != ALError.NoError)
-            {
-              DebugTrace("Source binding error: " + oal_error);
-            }
-
-            if (IsXFi)
-            {
-              // Binding effects
-              EFX.BindSourceToAuxiliarySlot(source, slot, 0, 0);
-              DebugTrace("Binding effect");
-            }
-
-            // Correcting gain to match last played file
-            AL.Source(source, ALSourcef.Gain, volume);
-
-            // Correcting effect and filter to match last played file
-            if (Math.Truncate(playback_speed * 100) == 100)
-            {
-              if (IsXFi)
-              {
-                // Reset effect
-                EFX.Effect(effect, EfxEffecti.PitchShifterCoarseTune, 0);
-                EFX.Effect(effect, EfxEffecti.PitchShifterFineTune, 0);
-
-                if (!pitch_shift_enabled)
-                {
-                  // Disable filter
-                  EFX.Filter(filter, EfxFilterf.LowpassGain, 1f);
-                  EFX.BindFilterToSource(source, filter);
-
-                  // Disable effect
-                  EFX.AuxiliaryEffectSlot(slot, EfxAuxiliaryi.EffectslotEffect, (int)EfxEffectType.Null);
-                }
-              }
-
-              // Changing pitch
-              AL.Source(source, ALSourcef.Pitch, 1f);
-            }
-            else
-            {
-              if (IsXFi && pitch_shift_enabled)
-              {
-                // Changing effect
-                EFX.Effect(effect, EfxEffecti.PitchShifterCoarseTune, pitch_correction[0]);
-                EFX.Effect(effect, EfxEffecti.PitchShifterFineTune, pitch_correction[1]);
-                EFX.AuxiliaryEffectSlot(slot, EfxAuxiliaryi.EffectslotEffect, effect);
-
-                // Changing filter
-                EFX.Filter(filter, EfxFilterf.LowpassGain, 0f); // To disable direct sound and leave only the effect
-                EFX.BindFilterToSource(source, filter);
-              }
-
-              // Change source speed
-              AL.Source(source, ALSourcef.Pitch, playback_speed);
-            }
-
-            AL.SourcePlay(source);
-
-            oal_error = AL.GetError();
-            if (oal_error != ALError.NoError)
-            {
-              DebugTrace("Unable to play source: " + oal_error);
-              break;
-            }
-
-            decimal total_time_seconds = ExtensionMethods.ToDecimal(total_time);
-
-            #region Playback
-            while (AL.GetSourceState(source) == ALSourceState.Playing || AL.GetSourceState(source) == ALSourceState.Paused) // We want to wait until application exit
-            {
-              Thread.Sleep(update_time_ms);
-
-              if (pause_change)
-              {
-                if (paused)
-                {
-                  AL.SourcePause(source);
-                  pause_change = false;
-                }
-                else
-                {
-                  AL.SourcePlay(source);
-                  pause_change = false;
-                }
-              }
-
-              if (mudando_velocidade)
-              {
-                if (Math.Truncate(playback_speed * 100) == 100)
-                {
-                  if (IsXFi)
-                  {
-                    // Reset effect
-                    EFX.Effect(effect, EfxEffecti.PitchShifterCoarseTune, 0);
-                    EFX.Effect(effect, EfxEffecti.PitchShifterFineTune, 0);
-
-                    if (!pitch_shift_enabled)
-                    {
-                      // Disable filter
-                      EFX.Filter(filter, EfxFilterf.LowpassGain, 1f);
-                      EFX.BindFilterToSource(source, filter);
-
-                      // Disable effect
-                      EFX.AuxiliaryEffectSlot(slot, EfxAuxiliaryi.EffectslotEffect, (int)EfxEffectType.Null);
-                    }
-                  }
-
-                  // Changing pitch
-                  AL.Source(source, ALSourcef.Pitch, 1f);
-                }
-                else
-                {
-                  if (IsXFi)
-                  {
-                    if (pitch_shift_enabled)
-                    {
-                      // Changing effect
-                      pitch_correction = PitchCorrection(playback_speed);
-                      EFX.Effect(effect, EfxEffecti.PitchShifterCoarseTune, pitch_correction[0]);
-                      EFX.Effect(effect, EfxEffecti.PitchShifterFineTune, pitch_correction[1]);
-                      EFX.AuxiliaryEffectSlot(slot, EfxAuxiliaryi.EffectslotEffect, effect);
-
-                      // Changing filter
-                      EFX.Filter(filter, EfxFilterf.LowpassGain, 0f); // To disable direct sound and leave only the effect
-                      EFX.BindFilterToSource(source, filter);
-                    }
-                    else
-                    {
-                      // Disable filter
-                      EFX.Filter(filter, EfxFilterf.LowpassGain, 1f);
-                      EFX.BindFilterToSource(source, filter);
-
-                      // Disable effect
-                      EFX.AuxiliaryEffectSlot(slot, EfxAuxiliaryi.EffectslotEffect, (int)EfxEffectType.Null);
-                    }
-                  }
-
-                  // Change source speed
-                  AL.Source(source, ALSourcef.Pitch, playback_speed);
-                }
-
-                mudando_velocidade = false;
-              }
-
-              // Change volume
-              if (mudando_volume)
-              {
-                AL.Source(source, ALSourcef.Gain, volume);
-                mudando_volume = false;
-              }
-
-              if (change_file)
-              {
-                break;
-              }
-
-              AL.GetSource(source, ALSourcef.SecOffset, out music_current_time);
-              // Needed on newer X-Fi drivers. I could also change the source to streaming, but with this we can be sure.
-              if ((int)music_current_time > total_time_seconds && IsXFi)
-              {
-                break;
-              }
-
-              information_text = ("Música atual: " + (file_number + 1)) + Environment.NewLine +
-                  ("Posição: " + (int)music_current_time + "s/" + total_time_seconds + "s") + Environment.NewLine +
-                  ("Volume: " + (int)(double_volume) + "%") + Environment.NewLine +
-                  ("Velocidade: " + (int)(playback_speed * 100) + "%");
-
-              if (xram_available)
-              {
-                information_text = information_text + Environment.NewLine + ("XRam livre: " + (XRam.GetRamFree / (1024.0 * 1024)).ToString("0.00") + "MB");
-              }
-
-              infoText.Dispatcher.Invoke(new UpdateinfoTextCallback(this.UpdateinfoText), new object[] { information_text });
-            }
-            #endregion
-
-            music_current_time = 0;
-
-            DebugTrace("Stopping source");
-
-            AL.SourceStop(source);
-
-            oal_error = AL.GetError();
-            if (oal_error != ALError.NoError)
-            {
-              DebugTrace("Unable to stop source: " + oal_error);
-              break;
-            }
-
-            // Deleting source and buffer
-            AL.DeleteSource(source);
-
-            oal_error = AL.GetError();
-            if (oal_error != ALError.NoError)
-            {
-              DebugTrace("Unable to delete source: " + oal_error);
-            }
-
-            AL.DeleteBuffer(buffer);
-
-            oal_error = AL.GetError();
-            if (oal_error != ALError.NoError)
-            {
-              DebugTrace("Unable to delete buffer: " + oal_error);
-            }
-
-            if (file_number == (filePaths.Length - 1) && !change_file)
-            {
-              // Restart playback.
-              file_number = 0;
-            }
-            else if (change_file)
-            {
-              change_file = false;
-              break;
-            }
-            else
-            {
-              file_number++;
-            }
-          }
-        }
-        #endregion
-
-        EFX.DeleteAuxiliaryEffectSlot(slot);
-        EFX.DeleteEffect(effect);
-        EFX.DeleteFilter(filter);
-        AL.DeleteSource(source);
-        AL.DeleteBuffer(buffer);
-        ac.Dispose(); // Cleaning context
-
-        DebugTrace("Disposing context");
-
-        return;
-      }
+      AllPlaybackDevices = AudioContext.AvailableDevices;
+      DeviceChoice.Dispatcher.Invoke(new UpdateDeviceListCallBack(this.UpdateDeviceList));
+
+      // The player is generated on the selection changed handler
+      //oalPlayer = new OpenALPlayer(filePaths, last_selected_device);
     }
     #endregion
 
@@ -619,57 +191,26 @@ namespace OpenAL_Music_Player
       {
         if (filePaths.Length > 0)
         {
-          if (useObjectOrientedMethod)
+          if (oalPlayer.Status == OpenALPlayer.PlayerState.Paused)
           {
-            if (oalPlayer.Status == OpenALPlayer.PlayerState.Paused)
-            {
-              oalPlayer.Unpause();
-              SoundPlayPause.Content = "Pause";
-            }
-            else
-            {
-              if (oalPlayer.Status == OpenALPlayer.PlayerState.Playing)
-              {
-                oalPlayer.Pause();
-                SoundPlayPause.Content = "Play";
-              }
-              else
-              {
-                oalPlayer.Play();
-                SoundPlayPause.Content = "Pause";
-              }
-            }
-
-            playlistItems.SelectedIndex = oalPlayer.CurrentMusic - 1;
+            oalPlayer.Unpause();
+            SoundPlayPause.Content = "Pause";
           }
           else
           {
-            if (paused && is_playing)
+            if (oalPlayer.Status == OpenALPlayer.PlayerState.Playing)
             {
-              paused = false;
-              pause_change = true;
-            }
-            else if (!is_playing)
-            {
-              is_playing = true;
-            }
-            else
-            {
-              paused = true;
-              pause_change = true;
-            }
-
-            if (paused)
-            {
+              oalPlayer.Pause();
               SoundPlayPause.Content = "Play";
             }
             else
             {
+              oalPlayer.Play();
               SoundPlayPause.Content = "Pause";
             }
-
-            playlistItems.SelectedIndex = file_number;
           }
+
+          playlistItems.SelectedIndex = oalPlayer.CurrentMusic - 1;
         }
       }
     }
@@ -680,41 +221,17 @@ namespace OpenAL_Music_Player
       {
         if (filePaths.Length > 0)
         {
-          if (useObjectOrientedMethod)
-          {
-            SoundPlayPause.Content = "Pause";
-            oalPlayer.NextTrack();
-            playlistItems.SelectedIndex = oalPlayer.CurrentMusic - 1;
-          }
-          else
-          {
-            file_number++;
-
-            if (file_number == filePaths.Length) // When it reaches the end of the list.
-              file_number = 0;
-
-            playlistItems.SelectedIndex = file_number;
-
-            change_file = true;
-          }
+          SoundPlayPause.Content = "Pause";
+          oalPlayer.NextTrack();
+          playlistItems.SelectedIndex = oalPlayer.CurrentMusic - 1;
         }
       }
     }
 
     private void Stop_Click(object sender, RoutedEventArgs e)
     {
-      if (useObjectOrientedMethod)
-      {
-        SoundPlayPause.Content = "Play";
-        oalPlayer.Stop();
-      }
-      else
-      {
-        file_number = 0;
-        is_playing = false;
-        stop_playback = true;
-        change_file = true;
-      }
+      SoundPlayPause.Content = "Play";
+      oalPlayer.Stop();
     }
 
     private void Back_Click(object sender, RoutedEventArgs e)
@@ -723,26 +240,9 @@ namespace OpenAL_Music_Player
       {
         if (filePaths.Length > 0)
         {
-          if (useObjectOrientedMethod)
-          {
-            SoundPlayPause.Content = "Pause";
-            oalPlayer.PreviousTrack();
-            playlistItems.SelectedIndex = oalPlayer.CurrentMusic - 1;
-          }
-          else
-          {
-            if (file_number > 0)
-            {
-              file_number--;
-            }
-            else
-            {
-              file_number = filePaths.Length - 1;
-            }
-
-            playlistItems.SelectedIndex = file_number;
-            change_file = true;
-          }
+          SoundPlayPause.Content = "Pause";
+          oalPlayer.PreviousTrack();
+          playlistItems.SelectedIndex = oalPlayer.CurrentMusic - 1;
         }
       }
     }
@@ -755,71 +255,29 @@ namespace OpenAL_Music_Player
 
     private void playlistItem_MouseDoubleClick(object sender, RoutedEventArgs e)
     {
-      if (useObjectOrientedMethod)
+      if (playlistItems.SelectedIndex != -1)
       {
-        if (playlistItems.SelectedIndex != -1)
-        {
-          SoundPlayPause.Content = "Pause";
-          // is SelectedIndex zero indexed? Yes.
-          oalPlayer.CurrentMusic = playlistItems.SelectedIndex + 1;
-        }
-      }
-      else
-      {
-        if (file_number != playlistItems.SelectedIndex)
-        {
-          file_number = playlistItems.SelectedIndex;
-          change_file = true;
-
-          if (!is_playing)
-          {
-            is_playing = true;
-          }
-
-          if (paused)
-          {
-            SoundPlayPause.Content = "Pause";
-            paused = false;
-            pause_change = true;
-          }
-        }
-        else
-        {
-          if (!is_playing)
-          {
-            change_file = true;
-            is_playing = true;
-          }
-        }
+        SoundPlayPause.Content = "Pause";
+        // is SelectedIndex zero indexed? Yes.
+        oalPlayer.CurrentMusic = playlistItems.SelectedIndex + 1;
       }
     }
 
     private void Slider_VolumeChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
-      if (useObjectOrientedMethod)
+      if (oalPlayer != null)
       {
-        if (oalPlayer != null)
-          oalPlayer.Volume = (float)e.NewValue;
-      }
-      else
-      {
-        double_volume = e.NewValue; // Linear volume scale
-        volume = 0.0031623f * (float)Math.Exp(double_volume / 100 * 5.757f); // Exp volume scale
-        mudando_volume = true;
+        oalPlayer.Volume = (float)e.NewValue;
+        volume_text_display.Text = e.NewValue.ToString("0") + "%";
       }
     }
 
     public void Slider_SpeedChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
-      if (useObjectOrientedMethod)
+      if (oalPlayer != null)
       {
-        if (oalPlayer != null)
-          oalPlayer.Pitch = (float)e.NewValue / 100;
-      }
-      else
-      {
-        playback_speed = (float)e.NewValue / 100;
-        mudando_velocidade = true;
+        oalPlayer.Pitch = (float)e.NewValue;
+        speed_text_display.Text = (e.NewValue * 100).ToString("0") + "%";
       }
     }
 
@@ -829,26 +287,35 @@ namespace OpenAL_Music_Player
       CPUUsagePercent.Text = (total_cpu_usage / CPU_logic_processors).ToString("0.0") + "%";
     }
 
-    private void UpdateinfoText(string message)
-    {
-      infoText.Text = (message);
-    }
-
     private void UpdateInfoText(object source, EventArgs e)
     {
       if (oalPlayer != null)
       {
-        message = ("Música atual: " + (oalPlayer.CurrentMusic)) + Environment.NewLine +
-            ("Posição: " + (int)oalPlayer.TrackCurrentTime + "s/" + (int)oalPlayer.TrackTotalTime + "s") + Environment.NewLine +
-            ("Volume: " + (int)(oalPlayer.Volume) + "%") + Environment.NewLine +
-            ("Velocidade: " + (int)(oalPlayer.Pitch * 100) + "%");
+        TimeSpan current_time = TimeSpan.FromSeconds(oalPlayer.TrackCurrentTime);
+        TimeSpan total_time = TimeSpan.FromSeconds(oalPlayer.TrackTotalTime);
+
+        if (oalPlayer.Status != OpenALPlayer.PlayerState.Stopped)
+        {
+          if (oalPlayer.TrackTotalTime > 0)
+          {
+            audio_position_slider.Value = oalPlayer.TrackCurrentTime / oalPlayer.TrackTotalTime;
+          }          
+          current_music_text_display.Text = oalPlayer.CurrentMusic.ToString();
+          position_text_display.Text = current_time.TotalMinutes.ToString("0") + ":" + current_time.Seconds.ToString("00") +
+                                       " / " +
+                                       total_time.TotalMinutes.ToString("0") + ":" + total_time.Seconds.ToString("00");
+        }
+        else
+        {
+          audio_position_slider.Value = 0;
+          current_music_text_display.Text = "-";
+          position_text_display.Text = "0:00 / 0:00";
+        }
 
         if (oalPlayer.XRamTotal > 0)
         {
-          message = message + Environment.NewLine + ("XRam livre: " + (oalPlayer.XRamFree / (1024.0 * 1024)).ToString("0.00") + "MB");
+          xram_text_display.Text = (oalPlayer.XRamFree / (1024.0 * 1024)).ToString("0.00") + "MB / " + oalPlayer.XRamTotal.ToString("0.00") + " MB";
         }
-
-        infoText.Text = (message);
       }
     }
 
@@ -892,18 +359,8 @@ namespace OpenAL_Music_Player
 
     private void Window_Closing(object sender, EventArgs e)
     {
-      if (useObjectOrientedMethod)
-      {
-        if (oalPlayer != null)
-          oalPlayer.Dispose();
-      }
-      else
-      {
-        stop_playback = true;
-        playbackthread_enabled = false;
-        is_playing = false;
-        change_file = true;
-      }
+      if (oalPlayer != null)
+        oalPlayer.Dispose();
     }
     #endregion
 
@@ -926,76 +383,6 @@ namespace OpenAL_Music_Player
     //        }
 
     //        return sampleBufferShort.SelectMany(x => BitConverter.GetBytes(x)).ToArray();
-
-    public static ALFormat GetSoundFormat(int channels, int bits, bool float_support)
-    {
-      switch (channels)
-      {
-        case 1:
-          {
-            if (bits == 8)
-            {
-              return ALFormat.Mono8;
-            }
-            else if (bits == 16)
-            {
-              return ALFormat.Mono16;
-            }
-            else
-            {
-              if (float_support)
-              {
-                return ALFormat.MonoFloat32Ext;
-              }
-              else
-              {
-                throw new NotSupportedException("The specified sound format is not supported.");
-                //return 0x1203;
-              }
-            }
-          }
-        case 2:
-          {
-            if (bits == 8)
-            {
-              return ALFormat.Stereo8;
-            }
-            else if (bits == 16)
-            {
-              return ALFormat.Stereo16;
-            }
-            else
-            {
-              if (float_support)
-              {
-                return ALFormat.StereoFloat32Ext;
-              }
-              else
-              {
-                // Undocumented value
-                return (ALFormat)0x1203;
-              }
-            }
-          }
-        case 6:
-          {
-            if (bits == 8)
-            {
-              return ALFormat.Multi51Chn8Ext;
-            }
-            else if (bits == 16)
-            {
-              return ALFormat.Multi51Chn16Ext;
-            }
-            else
-            {
-              return ALFormat.Multi51Chn32Ext;
-            }
-          }
-        default:
-          throw new NotSupportedException("The specified sound format is not supported.");
-      }
-    }
 
     public static int[] PitchCorrection(float rate)
     {
@@ -1036,70 +423,28 @@ namespace OpenAL_Music_Player
 
     private void pitchShiftCheckbox_Checked(object sender, RoutedEventArgs e)
     {
-      if (useObjectOrientedMethod)
-      {
-        DebugTrace("EFX not implemented yet");
-      }
-      else
-      {
-        if (pitchShiftCheckbox.IsChecked.Value)
-        {
-          pitch_shift_enabled = true;
-          mudando_velocidade = true;
-        }
-        else
-        {
-          pitch_shift_enabled = false;
-          mudando_velocidade = true;
-        }
-      }
+      DebugTrace("EFX not implemented yet");
     }
 
     private int SetEffect(EffectsExtension EFX, int source, int slot, int effect, bool filtered, int filter)
     {
-      // Filtering
-      if (filtered)
-      {
-        EFX.Filter(filter, EfxFilterf.LowpassGain, 0f); // Allow only the effect to play
-        EFX.BindFilterToSource(source, filter);
-      }
-      else
-      {
-        EFX.Filter(filter, EfxFilterf.LowpassGain, 1f);
-        EFX.BindFilterToSource(source, filter);
-      }
-
-      EFX.AuxiliaryEffectSlot(slot, EfxAuxiliaryi.EffectslotEffect, effect);
-
+      // Dummy
       return 0;
     }
 
     private int RemoveEffect(EffectsExtension EFX, int source, int slot, int effect, int filter)
     {
-      EFX.Filter(filter, EfxFilterf.LowpassGain, 1f);
-      EFX.BindFilterToSource(source, filter);
-
-      EFX.Effect(effect, EfxEffecti.PitchShifterCoarseTune, 0);
-      EFX.Effect(effect, EfxEffecti.PitchShifterFineTune, 0);
-      EFX.AuxiliaryEffectSlot(slot, EfxAuxiliaryi.EffectslotEffect, (int)EfxEffectType.Null);
-
+      // Dummy
       return 0;
     }
 
     private void ThreadTimeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
-      if (useObjectOrientedMethod)
-      {
-        if (oalPlayer != null)
-          oalPlayer.UpdateRate = (int)e.NewValue;
+      if (oalPlayer != null)
+        oalPlayer.UpdateRate = (int)e.NewValue;
 
-        if (InfoText != null)
-          InfoText.Interval = (int)e.NewValue;
-      }
-      else
-      {
-        update_time_ms = (int)e.NewValue;
-      }
+      if (InfoText != null)
+        InfoText.Interval = (int)e.NewValue;
     }
 
     private void DebugTrace(string message)
@@ -1107,26 +452,6 @@ namespace OpenAL_Music_Player
 #if DEBUG
       Trace.WriteLine(message);
 #endif
-    }
-  }
-
-  // From http://www.codeproject.com/Questions/147596/TimeSpan-to-integer
-  public static class ExtensionMethods
-  {
-    public static decimal ToDecimal(this TimeSpan span)
-    {
-      decimal spanSecs = (span.Hours * 3600) + (span.Minutes * 60) + span.Seconds;
-      decimal result = spanSecs;
-      return result;
-    }
-
-    public static TimeSpan ToTimeSpan(this decimal value)
-    {
-      int days = Convert.ToInt32(Math.Ceiling(value));
-      value -= days;
-      int time = Convert.ToInt32(value * 86400M);
-      TimeSpan result = new TimeSpan(1, 0, 0, time, 0);
-      return result;
     }
   }
 }
