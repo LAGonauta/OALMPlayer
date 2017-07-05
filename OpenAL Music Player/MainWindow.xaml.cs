@@ -35,25 +35,17 @@ namespace OpenAL_Music_Player
     // Files in the directory
     static string[] filePaths;
 
-    // Generate playlist
-    public ObservableCollection<playlistItemsList> items = new ObservableCollection<playlistItemsList>();
-
-    public bool xram_available = false;
-
-    // File control
-    public static int file_number = 0;
-
-    // Multithreaded delegated callback, so our gui is not stuck while playing sound
-    public delegate void UpdateDeviceListCallBack();
-
     // Device selection initialization
     string last_selected_device = "";
     string config_file = "oalminerva.ini";
 
-    // Multithreaded controls
-    public static bool playbackthread_enabled = true;
-    public static bool is_playing = false;
-    public static int update_time_ms = 150;
+    // Generate playlist
+    public ObservableCollection<playlistItemsList> items = new ObservableCollection<playlistItemsList>();
+
+    // Multithreaded delegated callback, so our gui is not stuck while playing sound
+    public delegate void UpdateDeviceListCallBack();
+
+    // OpenAL controls
     OpenALPlayer oalPlayer;
     Thread openal_thread;
 
@@ -64,10 +56,6 @@ namespace OpenAL_Music_Player
 
     // Info text
     System.Windows.Forms.Timer InfoText;
-
-    // Variable used when verifying if user closed the window (to clean up) 
-    public byte p = 0;
-    public byte c = 0;
 
     #endregion
     public class playlistItemsList
@@ -135,23 +123,6 @@ namespace OpenAL_Music_Player
       oalPlayer.MusicList = mList;
     }
 
-    #region OpenAL Stuff
-    public static bool IsXFi = false;
-    public static bool float_support = false;
-    public static bool pause_change = false;
-    public static bool paused = false;
-    public static bool oalthread_enabled = true;
-    public static bool start_playback = false;
-    public static bool stop_playback = false;
-    public static bool change_file = false;
-    public static float volume = 1;
-    public static double double_volume = 1;
-    public static float playback_speed = 1f;
-    public static bool mudando_velocidade = false;
-    public static bool mudando_volume = false;
-    public static bool effects_enabled = false;
-    public static bool pitch_shift_enabled = false;
-
     public void OpenALThread()
     {
       AllPlaybackDevices = AudioContext.AvailableDevices;
@@ -160,7 +131,6 @@ namespace OpenAL_Music_Player
       // The player is generated on the selection changed handler
       //oalPlayer = new OpenALPlayer(filePaths, last_selected_device);
     }
-    #endregion
 
     #region GUI stuff
     private void Open_Click(object sender, RoutedEventArgs e)
@@ -173,10 +143,6 @@ namespace OpenAL_Music_Player
 
         if (result == System.Windows.Forms.DialogResult.OK)
         {
-          if (is_playing)
-          {
-            stop_playback = true;
-          }
           Thread.Sleep(250); // So we are sure that notthing bad happens...
           var allowedExtensions = new[] { ".mp3", ".wav", ".wma", ".ogg", ".flac", ".mp4", ".m4a", ".ac3" };
           filePaths = Directory.GetFiles(dlgOpen.SelectedPath).Where(file => allowedExtensions.Any(file.ToLower().EndsWith)).ToArray();
