@@ -301,9 +301,9 @@ namespace OpenAL_Music_Player
             audio_position_slider.Value = oalPlayer.TrackCurrentTime / oalPlayer.TrackTotalTime;
           }          
           current_music_text_display.Text = oalPlayer.CurrentMusic.ToString();
-          position_text_display.Text = current_time.TotalMinutes.ToString("0") + ":" + current_time.Seconds.ToString("00") +
+          position_text_display.Text = ((int)current_time.TotalMinutes).ToString() + ":" + current_time.Seconds.ToString("00") +
                                        " / " +
-                                       total_time.TotalMinutes.ToString("0") + ":" + total_time.Seconds.ToString("00");
+                                       ((int)total_time.TotalMinutes).ToString() + ":" + total_time.Seconds.ToString("00");
         }
         else
         {
