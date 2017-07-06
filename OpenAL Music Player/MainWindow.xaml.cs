@@ -1,9 +1,4 @@
-﻿using CSCore;
-using CSCore.Codecs;
-using CSCore.Streams.SampleConverter;
-using OpenTK.Audio;
-using OpenTK.Audio.OpenAL;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
@@ -13,6 +8,12 @@ using System.Windows;
 using System.Windows.Forms;
 using System.Windows.Controls;
 using System.Linq;
+
+using CSCore;
+using CSCore.Codecs;
+using TagLib;
+using OpenTK.Audio;
+using OpenTK.Audio.OpenAL;
 
 // TODO:
 // Make it OO
@@ -60,7 +61,10 @@ namespace OpenAL_Music_Player
     #endregion
     public class playlistItemsList
     {
+      public string Number { get; set; }
       public string Title { get; set; }
+      public string Album { get; set; }
+      public string FileName { get; set; }
     }
 
     public MainWindow()
@@ -73,9 +77,9 @@ namespace OpenAL_Music_Player
       playlistItems.ItemsSource = items;
 
       // Load last selected device from file, if not found use default
-      if (File.Exists(config_file))
+      if (System.IO.File.Exists(config_file))
       {
-        last_selected_device = File.ReadAllText(config_file);
+        last_selected_device = System.IO.File.ReadAllText(config_file);
         DebugTrace("The device that will be used is " + last_selected_device);
       }
       else
@@ -105,14 +109,16 @@ namespace OpenAL_Music_Player
 
     public void playListGen()
     {
-      for (int i = items.Count - 1; i >= 0; i--)
+      for (int i = items.Count - 1; i >= 0; --i)
       {
         items.RemoveAt(i);
       }
 
-      for (int i = 0; i < filePaths.Length; i++)
+      for (int i = 0; i < filePaths.Length; ++i)
       {
-        items.Add(new playlistItemsList() { Title = (i + 1 + ". " + Path.GetFileName(filePaths[i])) });
+        TagLib.File file = TagLib.File.Create(filePaths[i]);
+        items.Add(new playlistItemsList() { Number = (i + 1).ToString(), Title = file.Tag.Title, Album = file.Tag.Album,
+                                            FileName = (Path.GetFileName(filePaths[i])) });
       }
 
       List<string> mList = new List<string>();
@@ -315,7 +321,7 @@ namespace OpenAL_Music_Player
 
     private void DeviceChoice_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-      File.WriteAllText(config_file, (string)DeviceChoice.SelectedValue);
+      System.IO.File.WriteAllText(config_file, (string)DeviceChoice.SelectedValue);
       if (oalPlayer != null)
       {
         oalPlayer.Dispose();

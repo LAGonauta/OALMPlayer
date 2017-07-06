@@ -84,18 +84,21 @@
                     <Border.BorderBrush>
                         <SolidColorBrush Color="{DynamicResource {x:Static SystemColors.ActiveBorderColorKey}}"/>
                     </Border.BorderBrush>
-                    <ListBox x:Name="playlistItems" VerticalContentAlignment="Stretch">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding Title}" />
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                        <ListBox.ItemContainerStyle>
-                            <Style TargetType="{x:Type ListBoxItem}" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                    <ListView x:Name="playlistItems" VerticalContentAlignment="Stretch">
+                        <ListView.View>
+                            <GridView>
+                                <GridViewColumn Header="#" Width="25" DisplayMemberBinding="{Binding Number}" />
+                                <GridViewColumn Header="Title" Width="200" DisplayMemberBinding="{Binding Title}" />
+                                <GridViewColumn Header="Album" Width="100" DisplayMemberBinding="{Binding Album}" />
+                                <GridViewColumn Header="File name" Width="200" DisplayMemberBinding="{Binding FileName}" />
+                            </GridView>
+                        </ListView.View>
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="{x:Type ListViewItem}">
                                 <EventSetter Event="MouseDoubleClick" Handler="playlistItem_MouseDoubleClick"/>
                             </Style>
-                        </ListBox.ItemContainerStyle>
-                    </ListBox>
+                        </ListView.ItemContainerStyle>
+                    </ListView>
                 </Border>
             </GroupBox>
             <GroupBox Header="Info and settings" Margin="2,0" HorizontalAlignment="Left" VerticalAlignment="Top" Height="368" Width="295" Grid.Column="1">
@@ -223,7 +226,5 @@
                 </Grid>
             </GroupBox>
         </Grid>
-
-        <DockPanel HorizontalAlignment="Left" Height="20" LastChildFill="False" VerticalAlignment="Top" Width="632"/>
     </Grid>
 </Window>
