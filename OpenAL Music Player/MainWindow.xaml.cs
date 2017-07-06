@@ -29,16 +29,11 @@ namespace OpenAL_Music_Player
   {
     #region Fields
     public IList<string> AllPlaybackDevices;
-    public string DefaultPlaybackDevice;
     #endregion Fields
 
     #region Variables
     // Files in the directory
-    static string[] filePaths;
-
-    // Device selection initialization
-    string last_selected_device = "";
-    string config_file = "oalminerva.ini";
+    static List<string> filePaths = new List<string>();
 
     // Generate playlist
     public ObservableCollection<playlistItemsList> items = new ObservableCollection<playlistItemsList>();
@@ -71,22 +66,36 @@ namespace OpenAL_Music_Player
     {
       InitializeComponent();
 
+      // Set GUI
+      if (Properties.Settings.Default.LastPlaylist != null)
+      {
+        foreach (var path in Properties.Settings.Default.LastPlaylist)
+        {
+          filePaths.Add(path);
+        }
+        playListGen(); 
+      }
+
+      speed_slider.Value = Properties.Settings.Default.Speed;
+      volume_slider.Value = Properties.Settings.Default.Volume;
+      thread_rate_slider.Value = Properties.Settings.Default.UpdateRate;
+      switch ((OpenALPlayer.repeatType)Properties.Settings.Default.Repeat)
+      {
+        case OpenALPlayer.repeatType.All:
+          radioRepeatAll.IsChecked = true;
+          break;
+        case OpenALPlayer.repeatType.Song:
+          radioRepeatSong.IsChecked = true;
+          break;
+        case OpenALPlayer.repeatType.No:
+          radioRepeatNone.IsChecked = true;
+          break;
+      }
+
       // vorbis support
       CodecFactory.Instance.Register("ogg-vorbis", new CodecFactoryEntry(s => new NVorbisSource(s).ToWaveSource(), ".ogg"));
 
       playlistItems.ItemsSource = items;
-
-      // Load last selected device from file, if not found use default
-      if (System.IO.File.Exists(config_file))
-      {
-        last_selected_device = System.IO.File.ReadAllText(config_file);
-        DebugTrace("The device that will be used is " + last_selected_device);
-      }
-      else
-      {
-        last_selected_device = null;
-        DebugTrace("Using default device");
-      }
 
       // Starting audio thread
       openal_thread = new Thread(() => OpenALThread());
@@ -114,19 +123,17 @@ namespace OpenAL_Music_Player
         items.RemoveAt(i);
       }
 
-      for (int i = 0; i < filePaths.Length; ++i)
+      for (int i = 0; i < filePaths.Count; ++i)
       {
         TagLib.File file = TagLib.File.Create(filePaths[i]);
         items.Add(new playlistItemsList() { Number = (i + 1).ToString(), Title = file.Tag.Title, Album = file.Tag.Album,
                                             FileName = (Path.GetFileName(filePaths[i])) });
       }
 
-      List<string> mList = new List<string>();
-
-      foreach (string element in filePaths)
-        mList.Add(element);
-
-      oalPlayer.MusicList = mList;
+      if (oalPlayer != null)
+      {
+        oalPlayer.MusicList = filePaths; 
+      }
     }
 
     public void OpenALThread()
@@ -151,7 +158,11 @@ namespace OpenAL_Music_Player
         {
           Thread.Sleep(250); // So we are sure that notthing bad happens...
           var allowedExtensions = new[] { ".mp3", ".wav", ".wma", ".ogg", ".flac", ".mp4", ".m4a", ".ac3" };
-          filePaths = Directory.GetFiles(dlgOpen.SelectedPath).Where(file => allowedExtensions.Any(file.ToLower().EndsWith)).ToArray();
+          filePaths.Clear();
+          foreach (var path in Directory.GetFiles(dlgOpen.SelectedPath).Where(file => allowedExtensions.Any(file.ToLower().EndsWith)))
+          {
+            filePaths.Add(path);
+          }
           playListGen();
         }
       }
@@ -161,7 +172,7 @@ namespace OpenAL_Music_Player
     {
       if (filePaths != null)
       {
-        if (filePaths.Length > 0)
+        if (filePaths.Count > 0)
         {
           if (oalPlayer.Status == OpenALPlayer.PlayerState.Paused)
           {
@@ -191,7 +202,7 @@ namespace OpenAL_Music_Player
     {
       if (filePaths != null)
       {
-        if (filePaths.Length > 0)
+        if (filePaths.Count > 0)
         {
           SoundPlayPause.Content = "Pause";
           oalPlayer.NextTrack();
@@ -210,7 +221,7 @@ namespace OpenAL_Music_Player
     {
       if (filePaths != null)
       {
-        if (filePaths.Length > 0)
+        if (filePaths.Count > 0)
         {
           SoundPlayPause.Content = "Pause";
           oalPlayer.PreviousTrack();
@@ -240,8 +251,12 @@ namespace OpenAL_Music_Player
       if (oalPlayer != null)
       {
         oalPlayer.Volume = (float)e.NewValue;
-        volume_text_display.Text = e.NewValue.ToString("0") + "%";
       }
+
+      if (volume_text_display != null)
+      {
+        volume_text_display.Text = e.NewValue.ToString("0") + "%";
+      }      
     }
 
     public void Slider_SpeedChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -249,6 +264,10 @@ namespace OpenAL_Music_Player
       if (oalPlayer != null)
       {
         oalPlayer.Pitch = (float)e.NewValue;
+      }
+
+      if (speed_text_display != null)
+      {
         speed_text_display.Text = (e.NewValue * 100).ToString("0") + "%";
       }
     }
@@ -293,13 +312,13 @@ namespace OpenAL_Music_Player
 
     private void UpdateDeviceList()
     {
-      if (last_selected_device != null && AllPlaybackDevices.Contains(last_selected_device))
+      if (AllPlaybackDevices.Contains(Properties.Settings.Default.Device))
       {
-        DeviceChoice.Items.Add(last_selected_device);
+        DeviceChoice.Items.Add(Properties.Settings.Default.Device);
 
         foreach (string s in AllPlaybackDevices)
         {
-          if (s != last_selected_device)
+          if (s != Properties.Settings.Default.Device)
           {
             DeviceChoice.Items.Add(s);
           }
@@ -321,16 +340,43 @@ namespace OpenAL_Music_Player
 
     private void DeviceChoice_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-      System.IO.File.WriteAllText(config_file, (string)DeviceChoice.SelectedValue);
       if (oalPlayer != null)
       {
         oalPlayer.Dispose();
       }
       oalPlayer = new OpenALPlayer(filePaths, (string)DeviceChoice.SelectedValue);
+
+      // Load settings after changing player
+      if (radioRepeatAll.IsChecked == true)
+      {
+        oalPlayer.RepeatSetting = OpenALPlayer.repeatType.All;
+      }
+      else if (radioRepeatSong.IsChecked == true)
+      {
+        oalPlayer.RepeatSetting = OpenALPlayer.repeatType.Song;
+      }
+      else if (radioRepeatNone.IsChecked == true)
+      {
+        oalPlayer.RepeatSetting = OpenALPlayer.repeatType.No;
+      }
+
+      oalPlayer.Volume = (float)volume_slider.Value;
+      oalPlayer.Pitch = (float)speed_slider.Value;
+      oalPlayer.UpdateRate = (uint)thread_rate_slider.Value;
+      oalPlayer.MusicList = filePaths;
     }
 
     private void Window_Closing(object sender, EventArgs e)
     {
+      Properties.Settings.Default.Device = (string)DeviceChoice.SelectedValue;
+      Properties.Settings.Default.Repeat = (byte)oalPlayer.RepeatSetting;
+      Properties.Settings.Default.Volume = volume_slider.Value;
+      Properties.Settings.Default.Speed = speed_slider.Value;
+      Properties.Settings.Default.UpdateRate = (uint)thread_rate_slider.Value;
+      Properties.Settings.Default.LastPlaylist = new System.Collections.Specialized.StringCollection();
+      Properties.Settings.Default.LastPlaylist.AddRange(filePaths.ToArray());
+      Properties.Settings.Default.Save();
+
       if (oalPlayer != null)
         oalPlayer.Dispose();
     }
@@ -413,7 +459,7 @@ namespace OpenAL_Music_Player
     private void ThreadTimeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
       if (oalPlayer != null)
-        oalPlayer.UpdateRate = (int)e.NewValue;
+        oalPlayer.UpdateRate = (uint)e.NewValue;
 
       if (InfoText != null)
         InfoText.Interval = (int)e.NewValue;
@@ -434,7 +480,7 @@ namespace OpenAL_Music_Player
         else if (sender == radioRepeatNone)
         {
           oalPlayer.RepeatSetting = OpenALPlayer.repeatType.No;
-        } 
+        }
       }
     }
 

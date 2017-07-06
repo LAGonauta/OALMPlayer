@@ -19,7 +19,7 @@ namespace OpenAL_Music_Player
 
     // timer
     System.Threading.Timer timer;
-    int timerPeriod;
+    uint timerPeriod;
 
     // list with all file paths
     List<string> musicList;
@@ -61,7 +61,7 @@ namespace OpenAL_Music_Player
     /// <summary>
     /// Time in ms between each update of the player
     /// </summary>
-    public int UpdateRate
+    public uint UpdateRate
     {
       get
       {
@@ -71,8 +71,7 @@ namespace OpenAL_Music_Player
       set
       {
         timerPeriod = value;
-        currentState = PlayerState.ChangingTimer;
-        timer.Change(0, 1);
+        timer.Change(0, timerPeriod);
       }
     }
 
@@ -122,8 +121,10 @@ namespace OpenAL_Music_Player
         volumePercentage = value;
         //volume = 0.0031623f * (float)Math.Exp(volumePercentage / 100 * 5.757f);
         volume = (float)Math.Pow(volumePercentage / 100, 3);
-        currentState = PlayerState.ChangingVolume;
-        this.Now();
+        if (music != null)
+        {
+          music.Gain = volume;
+        }
       }
     }
 
@@ -137,8 +138,10 @@ namespace OpenAL_Music_Player
       set
       {
         pitch = value;
-        currentState = PlayerState.ChangingPitch;
-        this.Now();
+        if (music != null)
+        {
+          music.Pitch = pitch;
+        }
       }
     }
 
@@ -193,7 +196,7 @@ namespace OpenAL_Music_Player
     #endregion
 
     #region Constructor
-    public OpenALPlayer(string[] filePaths)
+    public OpenALPlayer(List<string> filePaths)
     {
       isValid = true;
       currentState = PlayerState.Stopped;
@@ -209,16 +212,13 @@ namespace OpenAL_Music_Player
 
       if (filePaths != null)
       {
-        foreach (string element in filePaths)
-        {
-          musicList.Add(element);
-        }
+        musicList = filePaths;
       }
 
       this.StartPlayer();
     }
 
-    public OpenALPlayer(string[] filePaths, string device)
+    public OpenALPlayer(List<string> filePaths, string device)
     {
       isValid = true;
       currentState = PlayerState.Stopped;
@@ -233,10 +233,7 @@ namespace OpenAL_Music_Player
 
       if (filePaths != null)
       {
-        foreach (string element in filePaths)
-        {
-          musicList.Add(element);
-        }
+        musicList = filePaths;
       }
       this.StartPlayer();
     }
@@ -391,6 +388,7 @@ namespace OpenAL_Music_Player
 
     private void DetectChanges(object obj)
     {
+      this.TimerDisable();
       switch (currentState)
       {
         case PlayerState.Stopped:
@@ -448,9 +446,6 @@ namespace OpenAL_Music_Player
           break;
 
         case PlayerState.ChangingTrack:
-          // temporary disable timer as the music loads
-          this.TimerDisable();
-
           if (music != null)
             music.Dispose();
 
@@ -461,9 +456,6 @@ namespace OpenAL_Music_Player
 
           currentState = PlayerState.Playing;
           lastState = PlayerState.ChangingTrack;
-
-          // reenable timer
-          this.TimerEnable();
           break;
 
         case PlayerState.StopPlayback:
@@ -473,26 +465,8 @@ namespace OpenAL_Music_Player
           currentState = PlayerState.Stopped;
           lastState = PlayerState.StopPlayback;
           break;
-
-        // no need to keep track of last state on those
-        case PlayerState.ChangingTimer:
-          if (timer != null)
-            timer.Change(timerPeriod, timerPeriod);
-          currentState = lastState;
-          break;
-
-        case PlayerState.ChangingVolume:
-          if (music != null)
-            music.Gain = volume;
-          currentState = lastState;
-          break;
-
-        case PlayerState.ChangingPitch:
-          if (music != null)
-            music.Pitch = pitch;
-          currentState = lastState;
-          break;
       }
+      this.TimerEnable();
     }
     #endregion
 
@@ -506,10 +480,7 @@ namespace OpenAL_Music_Player
       ChangingTrack,
       Pausing,
       Unpausing,
-      StopPlayback,
-      ChangingTimer,
-      ChangingVolume,
-      ChangingPitch
+      StopPlayback
     };
 
     public enum repeatType : byte

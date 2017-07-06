@@ -102,13 +102,14 @@ namespace OALEngine
     {
       get
       {
-        bool playing = false;
         foreach (OpenALEngine.SourceInstance source in sources)
         {
           if (AL.GetSourceState(source.id) == ALSourceState.Playing)
-            playing = true;
+          {
+            return true;
+          }
         }
-        return playing;
+        return false;
       }
     }
 
@@ -157,7 +158,9 @@ namespace OALEngine
         foreach (OpenALEngine.SourceInstance source in sources)
         {
           if (AL.IsSource(source.id))
+          {
             AL.Source(source.id, ALSourcef.MinGain, mingain);
+          }
         }
       }
     }
@@ -175,7 +178,9 @@ namespace OALEngine
         foreach (OpenALEngine.SourceInstance source in sources)
         {
           if (AL.IsSource(source.id))
+          {
             AL.Source(source.id, ALSourcef.Gain, gain);
+          }
         }
       }
     }
@@ -243,9 +248,7 @@ namespace OALEngine
     /// </summary>
     /// <param name="filePath"></param>
     /// <param name="ac"></param>
-    public OpenALSoundEffect(string filePath, ref OpenALEngine alengine) : this(filePath, ref alengine, false) { }
-
-    public OpenALSoundEffect(string filePath, ref OpenALEngine alengine, bool streaming)
+    public OpenALSoundEffect(string filePath, ref OpenALEngine alengine, bool streaming = false)
     {
       if (alengine != null && filePath != null)
       {
@@ -427,6 +430,9 @@ namespace OALEngine
         streamingCurrentTimeStopWatch.Start();
         streamingTimer.Start();
       }
+
+      // For some reason the source is muted when unpausing on OpenAL Soft
+      this.Gain = this.Gain;
     }
 
     public OpenALEngine.SourceInstance Play()
