@@ -12,7 +12,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 
-namespace OpenAL_Music_Player
+namespace OpenALMusicPlayer
 {
     /// <summary>
     /// Interaction logic for AboutWindow.xaml

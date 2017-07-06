@@ -4,7 +4,7 @@ using System.IO;
 using CSCore;
 using NVorbis;
 
-namespace OpenAL_Music_Player
+namespace OpenALMusicPlayer
 {
   // From https://github.com/filoe/cscore/blob/master/Samples/NVorbisIntegration/Program.cs
   public sealed class NVorbisSource : ISampleSource

@@ -1,7 +1,7 @@
-﻿<Application x:Class="OpenAL_Music_Player.App"
+﻿<Application x:Class="OpenALMusicPlayer.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="clr-namespace:OpenAL_Music_Player"
+             xmlns:local="clr-namespace:OpenALMusicPlayer"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
          

@@ -20,7 +20,7 @@ using OpenTK.Audio.OpenAL;
 // Use state machine
 // Use INotifyPropertyChanged 
 
-namespace OpenAL_Music_Player
+namespace OpenALMusicPlayer
 {
   /// <summary>
   /// Interaction logic for MainWindow.xaml

@@ -5,7 +5,7 @@ using OALEngine;
 using System.Threading;
 using OpenTK.Audio;
 
-namespace OpenAL_Music_Player
+namespace OpenALMusicPlayer
 {
   class OpenALPlayer : IDisposable
   {

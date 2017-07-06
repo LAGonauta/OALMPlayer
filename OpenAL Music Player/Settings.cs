@@ -1,4 +1,4 @@
-﻿namespace OpenAL_Music_Player.Properties {
+﻿namespace OpenALMusicPlayer.Properties {
     
     
     // This class allows you to handle specific events on the settings class:
