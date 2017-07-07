@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Drawing;
 using System.Diagnostics;
 using System.IO;
 using System.Threading;
@@ -54,6 +53,8 @@ namespace OpenALMusicPlayer
     // Info text
     System.Windows.Forms.Timer InfoText;
 
+    NotifyIcon ni;
+
     #endregion
     public class playlistItemsList
     {
@@ -69,7 +70,7 @@ namespace OpenALMusicPlayer
 
       var icon = System.Drawing.Icon.ExtractAssociatedIcon(System.Reflection.Assembly.GetEntryAssembly().ManifestModule.Name);
 
-      NotifyIcon ni = new System.Windows.Forms.NotifyIcon()
+      ni = new System.Windows.Forms.NotifyIcon()
       {
         Visible = true,
         Text = Title,
@@ -396,6 +397,8 @@ namespace OpenALMusicPlayer
 
       if (oalPlayer != null)
         oalPlayer.Dispose();
+
+      ni.Visible = false;
     }
     #endregion
 
