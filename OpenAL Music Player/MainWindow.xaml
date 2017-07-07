@@ -34,41 +34,35 @@
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <Border Grid.Column="0">
-                <GroupBox Header="Device" HorizontalAlignment="Left" VerticalContentAlignment="Stretch">
-                    <GroupBox.BorderBrush>
-                        <SolidColorBrush Color="{DynamicResource {x:Static SystemColors.ActiveBorderColorKey}}"/>
-                    </GroupBox.BorderBrush>
-                    <ComboBox x:Name="DeviceChoice" Grid.Column="0" VerticalAlignment="Center" SelectionChanged="DeviceChoice_SelectionChanged" MinWidth="200" HorizontalAlignment="Left"/>
-                </GroupBox>
-            </Border>
-            <Border Grid.Column="1">
-                <GroupBox Header="CPU Usage" Margin="5,0,0,0" VerticalContentAlignment="Stretch" >
-                    <GroupBox.BorderBrush>
-                        <SolidColorBrush Color="{DynamicResource {x:Static SystemColors.ActiveBorderColorKey}}"/>
-                    </GroupBox.BorderBrush>
-                    <TextBlock x:Name="CPUUsagePercent" Text="-" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center"/>
-                </GroupBox>
-            </Border>
-            <Border Grid.Column="2">
-                <GroupBox Margin="5,0,5,0" Header="Playback controls" VerticalContentAlignment="Center">
-                    <GroupBox.BorderBrush>
-                        <SolidColorBrush Color="{DynamicResource {x:Static SystemColors.ActiveBorderColorKey}}"/>
-                    </GroupBox.BorderBrush>
-                    <Grid HorizontalAlignment="Left" Height="24" VerticalAlignment="Top">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <Button x:Name="SoundPlayPause" Content="Play" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,10,0" Grid.Column="0" Click="Play_Click"/>
-                        <Button x:Name="SoundStop" Content="Stop" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,10,0" Grid.Column="1" Click="Stop_Click"/>
-                        <Button x:Name="SoundBack" Content="Back" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,10,0" Grid.Column="2" Click="Back_Click"/>
-                        <Button x:Name="SoundNext" Content="Next" HorizontalAlignment="Center" VerticalAlignment="Center" Grid.Column="3" Click="Next_Click"/>
-                    </Grid>
-                </GroupBox>
-            </Border>
+            <GroupBox Header="Device" Grid.Column="0" HorizontalAlignment="Left" VerticalContentAlignment="Stretch">
+                <GroupBox.BorderBrush>
+                    <SolidColorBrush Color="{DynamicResource {x:Static SystemColors.ActiveBorderColorKey}}"/>
+                </GroupBox.BorderBrush>
+                <ComboBox x:Name="DeviceChoice" Grid.Column="0" VerticalAlignment="Center" SelectionChanged="DeviceChoice_SelectionChanged" MinWidth="200" HorizontalAlignment="Left"/>
+            </GroupBox>
+            <GroupBox Header="CPU Usage" Grid.Column="1" Margin="5,0,0,0" VerticalContentAlignment="Stretch" >
+                <GroupBox.BorderBrush>
+                    <SolidColorBrush Color="{DynamicResource {x:Static SystemColors.ActiveBorderColorKey}}"/>
+                </GroupBox.BorderBrush>
+                <TextBlock x:Name="CPUUsagePercent" Text="-" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center"/>
+            </GroupBox>
+            <GroupBox Margin="5,0,5,0" Grid.Column="2" Header="Playback controls" VerticalContentAlignment="Center">
+                <GroupBox.BorderBrush>
+                    <SolidColorBrush Color="{DynamicResource {x:Static SystemColors.ActiveBorderColorKey}}"/>
+                </GroupBox.BorderBrush>
+                <Grid HorizontalAlignment="Left" Height="24" VerticalAlignment="Top">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <Button x:Name="SoundPlayPause" Content="Play" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,10,0" Grid.Column="0" Click="Play_Click"/>
+                    <Button x:Name="SoundStop" Content="Stop" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,10,0" Grid.Column="1" Click="Stop_Click"/>
+                    <Button x:Name="SoundBack" Content="Back" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,10,0" Grid.Column="2" Click="Back_Click"/>
+                    <Button x:Name="SoundNext" Content="Next" HorizontalAlignment="Center" VerticalAlignment="Center" Grid.Column="3" Click="Next_Click"/>
+                </Grid>
+            </GroupBox>
         </Grid>
 
         <Grid Grid.Row="2">

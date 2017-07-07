@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Drawing;
 using System.Diagnostics;
 using System.IO;
 using System.Threading;
@@ -65,6 +66,22 @@ namespace OpenALMusicPlayer
     public MainWindow()
     {
       InitializeComponent();
+
+      var icon = System.Drawing.Icon.ExtractAssociatedIcon(System.Reflection.Assembly.GetEntryAssembly().ManifestModule.Name);
+
+      NotifyIcon ni = new System.Windows.Forms.NotifyIcon()
+      {
+        Visible = true,
+        Text = Title,
+        Icon = icon
+      };
+
+      ni.DoubleClick +=
+        delegate (object sender, EventArgs e)
+        {
+          this.Show();
+          this.WindowState = WindowState.Normal;
+        };
 
       // Set GUI
       if (Properties.Settings.Default.LastPlaylist != null)
@@ -482,6 +499,16 @@ namespace OpenALMusicPlayer
           oalPlayer.RepeatSetting = OpenALPlayer.repeatType.No;
         }
       }
+    }
+
+    protected override void OnStateChanged(EventArgs e)
+    {
+      if (WindowState == WindowState.Minimized)
+      {
+        this.Hide();
+      }
+
+      base.OnStateChanged(e);
     }
 
     private void DebugTrace(string message)
