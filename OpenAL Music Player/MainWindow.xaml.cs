@@ -323,7 +323,7 @@ namespace OpenALMusicPlayer
 
         if (oalPlayer.XRamTotal > 0)
         {
-          xram_text_display.Text = (oalPlayer.XRamFree / (1024.0 * 1024)).ToString("0.00") + "MB / " + oalPlayer.XRamTotal.ToString("0.00") + " MB";
+          xram_text_display.Text = (oalPlayer.XRamFree / (1024.0 * 1024)).ToString("0.00") + "MB";
         }
       }
     }
