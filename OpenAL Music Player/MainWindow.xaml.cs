@@ -60,6 +60,7 @@ namespace OpenALMusicPlayer
     {
       public string Number { get; set; }
       public string Title { get; set; }
+      public string Performer { get; set; }
       public string Album { get; set; }
       public string FileName { get; set; }
     }
@@ -120,6 +121,7 @@ namespace OpenALMusicPlayer
       openal_thread.Start();
 
       // Starting CPU usage timer
+      total_cpu_usage = theCPUCounter.NextValue();
       this.UpdateCPUUsage(null, null);
       var CPUTimer = new System.Windows.Forms.Timer();
       CPUTimer.Interval = 2000;
@@ -144,8 +146,8 @@ namespace OpenALMusicPlayer
       for (int i = 0; i < filePaths.Count; ++i)
       {
         TagLib.File file = TagLib.File.Create(filePaths[i]);
-        items.Add(new playlistItemsList() { Number = (i + 1).ToString(), Title = file.Tag.Title, Album = file.Tag.Album,
-                                            FileName = (Path.GetFileName(filePaths[i])) });
+        items.Add(new playlistItemsList() { Number = (i + 1).ToString(), Title = file.Tag.Title, Performer = file.Tag.FirstPerformer,
+                                            Album = file.Tag.Album, FileName = (Path.GetFileName(filePaths[i])) });
       }
 
       if (oalPlayer != null)
@@ -298,6 +300,7 @@ namespace OpenALMusicPlayer
 
     private void UpdateInfoText(object source, EventArgs e)
     {
+      // Updating the values only when they change. Is this faster or slower than just updating them?
       if (oalPlayer != null)
       {
         TimeSpan current_time = TimeSpan.FromSeconds(oalPlayer.TrackCurrentTime);
@@ -307,23 +310,65 @@ namespace OpenALMusicPlayer
         {
           if (oalPlayer.TrackTotalTime > 0)
           {
-            audio_position_slider.Value = oalPlayer.TrackCurrentTime / oalPlayer.TrackTotalTime;
-          }          
-          current_music_text_display.Text = oalPlayer.CurrentMusic.ToString();
-          position_text_display.Text = ((int)current_time.TotalMinutes).ToString() + ":" + current_time.Seconds.ToString("00") +
-                                       " / " +
-                                       ((int)total_time.TotalMinutes).ToString() + ":" + total_time.Seconds.ToString("00");
+            if (audio_position_slider.Value != oalPlayer.TrackCurrentTime / oalPlayer.TrackTotalTime)
+            {
+              audio_position_slider.Value = oalPlayer.TrackCurrentTime / oalPlayer.TrackTotalTime;
+            }
+          }
+
+          if (current_music_text_display.Text != oalPlayer.CurrentMusic.ToString())
+          {
+            current_music_text_display.Text = oalPlayer.CurrentMusic.ToString();
+          }
+
+          string pos_text = ((int)current_time.TotalMinutes).ToString() + ":" + current_time.Seconds.ToString("00") +
+                            " / " +
+                            ((int)total_time.TotalMinutes).ToString() + ":" + total_time.Seconds.ToString("00");
+
+          if (position_text_display.Text != pos_text)
+          {
+            position_text_display.Text = pos_text;
+          }
+
+          if (playlistItems.SelectedIndex != oalPlayer.CurrentMusic - 1)
+          {
+            if (!playlistItems.IsMouseOver)
+            {
+              playlistItems.SelectedIndex = oalPlayer.CurrentMusic - 1;
+            } 
+          }
         }
         else
         {
-          audio_position_slider.Value = 0;
-          current_music_text_display.Text = "-";
-          position_text_display.Text = "0:00 / 0:00";
+          if (audio_position_slider.Value != 0)
+          {
+            audio_position_slider.Value = 0;
+          }
+          
+          if (current_music_text_display.Text != "-")
+          {
+            current_music_text_display.Text = "-";
+          }
+          
+          if (position_text_display.Text != "0:00 / 0:00")
+          {
+            position_text_display.Text = "0:00 / 0:00";
+          }
         }
 
         if (oalPlayer.XRamTotal > 0)
         {
-          xram_text_display.Text = (oalPlayer.XRamFree / (1024.0 * 1024)).ToString("0.00") + "MB";
+          if (xram_text_display.Text != (oalPlayer.XRamFree / (1024.0 * 1024)).ToString("0.00") + "MB")
+          {
+            xram_text_display.Text = (oalPlayer.XRamFree / (1024.0 * 1024)).ToString("0.00") + "MB"; 
+          }
+        }
+        else
+        {
+          if (xram_text_display.Text != "-")
+          {
+            xram_text_display.Text = "-";
+          }
         }
       }
     }

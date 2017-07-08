@@ -78,6 +78,7 @@
                             <GridView>
                                 <GridViewColumn Header="#" Width="25" DisplayMemberBinding="{Binding Number}" />
                                 <GridViewColumn Header="Title" Width="200" DisplayMemberBinding="{Binding Title}" />
+                                <GridViewColumn Header="Artist" Width="120" DisplayMemberBinding="{Binding Performer}" />
                                 <GridViewColumn Header="Album" Width="100" DisplayMemberBinding="{Binding Album}" />
                                 <GridViewColumn Header="File name" Width="200" DisplayMemberBinding="{Binding FileName}" />
                             </GridView>
