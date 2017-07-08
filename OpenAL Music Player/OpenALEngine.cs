@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 using OpenTK;
@@ -25,28 +25,28 @@ namespace OALEngine
     // audio device
     AudioContext ac;
     XRamExtension XRam;
-    bool xRamActive = false;
+    bool xram_active = false;
 
     // should effect slots and effects be managed by the engine? They are very limited...
     EffectsExtension efx;
     List<EffectSlot> slots;
     List<EffectInstance> effects = new List<EffectInstance>();
-    bool efxActive = false;
+    bool efx_active = false;
     IList<string> devices = AudioContext.AvailableDevices;
 
     // error checking
     ALError error;
 
     // source generation error handling
-    bool sourceReachedLimit = false;
-    int maxNumberOfSources = 256;
+    bool source_reached_limit = false;
+    const int MAX_NUMBER_OF_SOURCES = 256;
     PriorityNumbers priorityNumber;
 
     // sources list
     List<SourceInstance> sources = new List<SourceInstance>();
 
     // finalizer
-    bool isValid = true;
+    bool is_valid = true;
 
     #endregion
 
@@ -60,7 +60,7 @@ namespace OALEngine
     {
       get
       {
-        if (xRamActive)
+        if (xram_active)
         {
           return XRam.GetRamFree;
         }
@@ -75,7 +75,7 @@ namespace OALEngine
     {
       get
       {
-        if (xRamActive)
+        if (xram_active)
         {
           return XRam.GetRamSize;
         }
@@ -127,45 +127,25 @@ namespace OALEngine
     #endregion
 
     #region Constructors
-    public OpenALEngine()
+    public OpenALEngine(bool xram = false)
     {
       var devices = AudioContext.AvailableDevices;
       // force first device, which probably isn't generic software, and disable EFX.
       ac = new AudioContext(devices[0], 0, 0, false, false);
-      XRam = new XRamExtension();
-    }
-
-    public OpenALEngine(string device)
-    {
-      ac = new AudioContext(device, 0, 0, false, false);
-    }
-
-    public OpenALEngine(string device, bool efx, AudioContext.MaxAuxiliarySends sends)
-    {
-      ac = new AudioContext(device, 0, 0, false, efx, sends);
-
-      if (efx)
+      if (xram)
       {
-        this.efx = new EffectsExtension();
-
-        if (sends != AudioContext.MaxAuxiliarySends.UseDriverDefault)
+        XRam = new XRamExtension();
+        if (XRam.GetRamSize > 0)
         {
-          slots = new List<EffectSlot>((int)sends);
+          xram_active = true;
         }
-        else
-        {
-          slots = new List<EffectSlot>(4);
-        }
-
-        efxActive = true;
       }
-
     }
 
-    public OpenALEngine(string device, bool efx, AudioContext.MaxAuxiliarySends sends, bool xram)
+    public OpenALEngine(string device, bool efx = false, AudioContext.MaxAuxiliarySends sends = AudioContext.MaxAuxiliarySends.UseDriverDefault, bool xram = false)
     {
       ac = new AudioContext(device, 0, 0, false, efx, sends);
-
+      
       if (efx)
       {
         this.efx = new EffectsExtension();
@@ -179,14 +159,17 @@ namespace OALEngine
           slots = new List<EffectSlot>(4);
         }
 
-        efxActive = true;
+        efx_active = true;
       }
 
 
       if (xram)
       {
         XRam = new XRamExtension();
-        xRamActive = true;
+        if (XRam.GetRamSize > 0)
+        {
+            xram_active = true;
+        }
       }
     }
     #endregion
@@ -197,9 +180,9 @@ namespace OALEngine
     {
       if (disposing)
       {
-        if (isValid)
+        if (is_valid)
         {
-          isValid = false;
+          is_valid = false;
           if (ac != null)
           {
             ac.Dispose();
@@ -688,7 +671,7 @@ namespace OALEngine
     private bool CheckSourcePriority(SourceInstance source)
     {
       bool safety = false;
-      if (sourceReachedLimit)
+      if (source_reached_limit)
       {
         if (source.priority == SoundPriority.MustPlay)
         {
