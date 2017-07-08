@@ -23,7 +23,7 @@
             </Canvas>
         </Grid>
         <TextBlock TextWrapping="Wrap" TextAlignment="Center" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24.656,166.54,24.343,20.46"><Run Text="This software uses OpenTK to interface with OpenA"/><Run Text="L"/><Run Text=", and uses CSCore and NVorbis to "/><Run Text="decode "/><Run Text="the audio files."/></TextBlock>
-        <TextBlock TextWrapping="Wrap" TextAlignment="Center" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,19.69,-0.04"><Run Text="Version 0.0."/><Run Text="0"/><Run Text=".1"/></TextBlock>
+        <TextBlock TextWrapping="Wrap" TextAlignment="Center" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,19.69,-0.04"><Run Text="Version 0.9.5.0"/></TextBlock>
 
     </Grid>
 </Window>
