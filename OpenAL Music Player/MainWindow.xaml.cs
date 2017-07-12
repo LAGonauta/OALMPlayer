@@ -90,7 +90,10 @@ namespace OpenALMusicPlayer
       {
         foreach (var path in Properties.Settings.Default.LastPlaylist)
         {
-          filePaths.Add(path);
+          if (System.IO.File.Exists(path))
+          {
+            filePaths.Add(path);
+          }
         }
         playListGen(); 
       }
