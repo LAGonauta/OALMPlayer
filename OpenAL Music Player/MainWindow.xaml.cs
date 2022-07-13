@@ -14,6 +14,7 @@ using CSCore.Codecs;
 using TagLib;
 using OpenTK.Audio;
 using OpenTK.Audio.OpenAL;
+using System.Reflection;
 
 // TODO:
 // Make it OO
@@ -69,9 +70,9 @@ namespace OpenALMusicPlayer
     {
       InitializeComponent();
 
-      var icon = System.Drawing.Icon.ExtractAssociatedIcon(System.Reflection.Assembly.GetEntryAssembly().ManifestModule.Name);
+      var icon = System.Drawing.Icon.ExtractAssociatedIcon(Assembly.GetEntryAssembly().ManifestModule.Name);
 
-      ni = new System.Windows.Forms.NotifyIcon()
+      ni = new NotifyIcon()
       {
         Visible = true,
         Text = Title,
