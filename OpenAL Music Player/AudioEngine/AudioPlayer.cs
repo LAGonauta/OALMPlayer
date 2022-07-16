@@ -135,6 +135,7 @@ namespace OpenALMusicPlayer.AudioEngine
         }
 
         var interval = streamingBufferTime / streamingBufferQueueSize;
+        CurrentTime = 0;
         while (true)
         {
           if (Interlocked.Read(ref stopping) == 1)
@@ -168,7 +169,7 @@ namespace OpenALMusicPlayer.AudioEngine
 
           // clear played buffers
           var processedBuffers = UnqueueBuffers(source);
-          CurrentTime = audioFile.GetPosition().TotalMilliseconds / 1000;
+          CurrentTime += audioFile.GetMilliseconds(processedBuffers.Select(b => b.bufferSize).Sum()) / 1000;
 
           await Task.Delay(interval, cancellationToken);
         }
@@ -229,7 +230,7 @@ namespace OpenALMusicPlayer.AudioEngine
       }
     }
 
-    private IEnumerable<(int, int)> UnqueueBuffers(int source)
+    private IEnumerable<(int bufferId, int bufferSize)> UnqueueBuffers(int source)
     {
       AL.GetSource(source, ALGetSourcei.BuffersProcessed, out int buffersProcessed);
       CheckALError("checking buffers processed");
