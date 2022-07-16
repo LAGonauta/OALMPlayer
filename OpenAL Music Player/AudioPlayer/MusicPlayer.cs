@@ -339,6 +339,7 @@ namespace OpenALMusicPlayer.AudioPlayer
           }
 
           trackCurrentTime = audioPlayer.CurrentTime;
+          trackTotalTime = audioPlayer.TotalTime;
 
           lastState = PlayerState.Playing;
           break;
@@ -361,7 +362,6 @@ namespace OpenALMusicPlayer.AudioPlayer
           break;
 
         case PlayerState.ChangingTrack:
-          trackTotalTime = audioPlayer.TotalTime;
           audioPlayer.Gain = volume;
           audioPlayer.Play(musicList[currentMusic], CancellationToken.None);
           audioPlayer.Pitch = pitch;
