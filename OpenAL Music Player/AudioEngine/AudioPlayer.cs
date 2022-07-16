@@ -29,6 +29,7 @@ namespace OpenALMusicPlayer.AudioEngine
 
     public double CurrentTime { get; private set; }
     public double TotalTime { get; private set; }
+    public bool IsValid => !disposedValue;
 
     public AudioPlayer(string device = null)
     {
@@ -101,16 +102,10 @@ namespace OpenALMusicPlayer.AudioEngine
       }
     }
 
-    public async Task Play(string filePath, CancellationToken cancellationToken)
+    public async Task Play(string filePath, Action<double, double> timeUpdateCallback, CancellationToken cancellationToken)
     {
       await Task.Run(async () =>
       {
-        if (Interlocked.CompareExchange(ref stopping, 1, 0) == 1)
-        {
-          Trace.WriteLine("Already stopping");
-          return;
-        }
-
         using var playMutex = Mutex.OpenExisting(mutexName);
         Interlocked.Exchange(ref stopping, 0);
         StopInternal();
@@ -142,6 +137,10 @@ namespace OpenALMusicPlayer.AudioEngine
           {
             Interlocked.Exchange(ref stopping, 0);
             StopInternal();
+            if (IsXFi)
+            {
+              return;
+            }
           }
 
           var state = AL.GetSourceState(source);
@@ -170,6 +169,7 @@ namespace OpenALMusicPlayer.AudioEngine
           // clear played buffers
           var processedBuffers = UnqueueBuffers(source);
           CurrentTime += audioFile.GetMilliseconds(processedBuffers.Select(b => b.bufferSize).Sum()) / 1000;
+          timeUpdateCallback(CurrentTime, TotalTime);
 
           await Task.Delay(interval, cancellationToken);
         }

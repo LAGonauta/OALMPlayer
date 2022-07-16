@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 
 using System.Threading;
+using System.Threading.Tasks;
 using OpenALMusicPlayer.AudioEngine;
 using OpenTK.Audio.OpenAL;
 
@@ -13,16 +14,11 @@ namespace OpenALMusicPlayer.AudioPlayer
     #region Fields
     private AudioEngine.AudioPlayer audioPlayer;
 
-    // timer
-    Timer timer;
-    uint timerPeriod;
-
     // list with all file paths
     List<string> musicList;
 
     // player state
     PlayerState currentState;
-    PlayerState lastState;
     int currentMusic;
     double trackTotalTime = 0;
     double trackCurrentTime = 0;
@@ -46,23 +42,6 @@ namespace OpenALMusicPlayer.AudioPlayer
       set
       {
         repeat_setting = value;
-      }
-    }
-
-    /// <summary>
-    /// Time in ms between each update of the player
-    /// </summary>
-    public uint UpdateRate
-    {
-      get
-      {
-        return timerPeriod;
-      }
-
-      set
-      {
-        timerPeriod = value;
-        timer.Change(0, timerPeriod);
       }
     }
 
@@ -93,7 +72,7 @@ namespace OpenALMusicPlayer.AudioPlayer
       {
         currentMusic = value - 1;
         currentState = PlayerState.ChangingTrack;
-        Now();
+        audioPlayer.Stop();
       }
     }
 
@@ -112,10 +91,7 @@ namespace OpenALMusicPlayer.AudioPlayer
         volumePercentage = value;
         //volume = 0.0031623f * (float)Math.Exp(volumePercentage / 100 * 5.757f);
         volume = (float)Math.Pow(volumePercentage / 100, 3);
-        if (audioPlayer != null)
-        {
-          audioPlayer.Gain = volume;
-        }
+        audioPlayer.Gain = volume;
       }
     }
 
@@ -129,10 +105,7 @@ namespace OpenALMusicPlayer.AudioPlayer
       set
       {
         pitch = value;
-        if (audioPlayer != null)
-        {
-          audioPlayer.Pitch = pitch;
-        }
+        audioPlayer.Pitch = pitch;
       }
     }
 
@@ -190,38 +163,62 @@ namespace OpenALMusicPlayer.AudioPlayer
     public MusicPlayer(List<string> filePaths, string device)
     {
       currentState = PlayerState.Stopped;
-      timerPeriod = 150;
       currentMusic = 0;
       volumePercentage = 100;
       pitch = 1f;
 
       audioPlayer = new AudioEngine.AudioPlayer(device);
-      timer = new Timer(new TimerCallback(DetectChanges), null, timerPeriod, timerPeriod);
 
       if (filePaths != null)
       {
         musicList = filePaths;
       }
-      StartPlayer();
     }
     #endregion
 
     #region Public methods
-    public void Update()
+    public async Task Play()
     {
+      if (currentState == PlayerState.Paused)
+      {
+        audioPlayer.Unpause();
+        currentState = PlayerState.Playing;
+        return;
+      }
+      currentState = PlayerState.Playing;
 
-    }
-
-    public void Play()
-    {
-      currentState = PlayerState.StartPlayback;
-      Now();
+      audioPlayer.Gain = volume;
+      audioPlayer.Pitch = pitch;
+      var player = audioPlayer;
+      while (currentState == PlayerState.Playing)
+      {
+        if (!player.IsValid)
+        {
+          return;
+        }
+        await player.Play(
+          musicList[currentMusic],
+          (current, total) =>
+          {
+            trackTotalTime = total;
+            trackCurrentTime = current;
+          },
+          CancellationToken.None);
+        if (currentState == PlayerState.Playing)
+        {
+          NextTrack(false);
+        }
+        if (currentState == PlayerState.ChangingTrack)
+        {
+          currentState = PlayerState.Playing;
+        }
+      }
     }
 
     public void Stop()
     {
-      currentState = PlayerState.StopPlayback;
-      Now();
+      currentState = PlayerState.Stopped;
+      audioPlayer.Stop();
     }
 
     public void NextTrack(bool force_next = true)
@@ -246,7 +243,7 @@ namespace OpenALMusicPlayer.AudioPlayer
         {
           if (currentMusic + 1 == musicList.Count)
           {
-            currentState = PlayerState.StopPlayback;
+            currentState = PlayerState.Stopped;
           }
           else
           {
@@ -255,8 +252,11 @@ namespace OpenALMusicPlayer.AudioPlayer
           }
         }
       }
-
-      Now();
+      var player = audioPlayer;
+      if (player != null)
+      {
+        audioPlayer.Stop();
+      }
     }
 
     public void PreviousTrack()
@@ -270,114 +270,23 @@ namespace OpenALMusicPlayer.AudioPlayer
         currentMusic = currentMusic - 1;
       }
       currentState = PlayerState.ChangingTrack;
-      Now();
+      audioPlayer.Stop();
     }
 
     public void Pause()
     {
-      currentState = PlayerState.Pausing;
-      Now();
+      currentState = PlayerState.Paused;
+      audioPlayer.Pause();
     }
 
     public void Unpause()
     {
-      currentState = PlayerState.Unpausing;
-      Now();
+      currentState = PlayerState.Playing;
+      audioPlayer.Unpause();
     }
     #endregion
 
     #region Private methods
-    private void StartPlayer()
-    {
-      Now();
-    }
-
-    /// <summary>
-    /// Force the timer to restart.
-    /// </summary>
-    private void Now()
-    {
-      timer.Change(0, timerPeriod);
-    }
-
-    private void TimerDisable()
-    {
-      timer.Change(Timeout.Infinite, Timeout.Infinite);
-    }
-
-    private void TimerEnable()
-    {
-      timer.Change(timerPeriod, timerPeriod);
-    }
-
-    private void DetectChanges(object obj)
-    {
-      TimerDisable();
-      switch (currentState)
-      {
-        case PlayerState.Stopped:
-          // waiting user input
-          lastState = PlayerState.Stopped;
-          break;
-
-        case PlayerState.StartPlayback:
-          if (currentState == PlayerState.Paused)
-          {
-            currentState = PlayerState.Unpausing;
-          }
-          else
-          {
-            currentState = PlayerState.ChangingTrack;
-          }
-          lastState = PlayerState.StartPlayback;
-          break;
-
-        case PlayerState.Playing:
-          if (audioPlayer.State != ALSourceState.Playing)
-          {
-            NextTrack(false);
-          }
-
-          trackCurrentTime = audioPlayer.CurrentTime;
-          trackTotalTime = audioPlayer.TotalTime;
-
-          lastState = PlayerState.Playing;
-          break;
-
-        case PlayerState.Paused:
-          // waiting user input
-          lastState = PlayerState.Paused;
-          break;
-
-        case PlayerState.Pausing:
-          audioPlayer.Pause();
-          currentState = PlayerState.Paused;
-          lastState = PlayerState.Pausing;
-          break;
-
-        case PlayerState.Unpausing:
-          audioPlayer.Unpause();
-          currentState = PlayerState.Playing;
-          lastState = PlayerState.Unpausing;
-          break;
-
-        case PlayerState.ChangingTrack:
-          audioPlayer.Gain = volume;
-          audioPlayer.Play(musicList[currentMusic], CancellationToken.None);
-          audioPlayer.Pitch = pitch;
-
-          currentState = PlayerState.Playing;
-          lastState = PlayerState.ChangingTrack;
-          break;
-
-        case PlayerState.StopPlayback:
-          audioPlayer.Stop();
-          currentState = PlayerState.Stopped;
-          lastState = PlayerState.StopPlayback;
-          break;
-      }
-      TimerEnable();
-    }
 
     protected virtual void Dispose(bool disposing)
     {
@@ -385,17 +294,9 @@ namespace OpenALMusicPlayer.AudioPlayer
       {
         if (disposing)
         {
-          if (timer != null)
-          {
-            timer.Change(Timeout.Infinite, Timeout.Infinite);
-            timer.Dispose();
-            timer = null;
-          }
-
           if (audioPlayer != null)
           {
             audioPlayer.Dispose();
-            audioPlayer = null;
           }
         }
 

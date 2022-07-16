@@ -181,12 +181,13 @@ namespace OpenALMusicPlayer
       }
     }
 
-    private void Play_Click(object sender, RoutedEventArgs e)
+    private async void Play_Click(object sender, RoutedEventArgs e)
     {
       if (filePaths != null)
       {
         if (filePaths.Count > 0)
         {
+          playlistItems.SelectedIndex = player.CurrentMusic - 1;
           if (player.Status == PlayerState.Paused)
           {
             player.Unpause();
@@ -196,17 +197,15 @@ namespace OpenALMusicPlayer
           {
             if (player.Status == PlayerState.Playing)
             {
-              player.Pause();
               SoundPlayPause.Content = "Play";
+              player.Pause();
             }
             else
             {
-              player.Play();
               SoundPlayPause.Content = "Pause";
+              await player.Play();
             }
           }
-
-          playlistItems.SelectedIndex = player.CurrentMusic - 1;
         }
       }
     }
@@ -415,7 +414,7 @@ namespace OpenALMusicPlayer
 
       player.Volume = (float)volume_slider.Value;
       player.Pitch = (float)speed_slider.Value;
-      player.UpdateRate = (uint)thread_rate_slider.Value;
+      //player.UpdateRate = (uint)thread_rate_slider.Value; TODO: remove this slider
       player.MusicList = filePaths;
     }
 
@@ -502,7 +501,7 @@ namespace OpenALMusicPlayer
     private void ThreadTimeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
       if (player != null)
-        player.UpdateRate = (uint)e.NewValue;
+        //player.UpdateRate = (uint)e.NewValue; TODO: remove this slider
 
       if (InfoText != null)
         InfoText.Interval = (int)e.NewValue;
