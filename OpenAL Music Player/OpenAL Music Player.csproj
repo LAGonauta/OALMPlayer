@@ -58,8 +58,15 @@
   <ItemGroup>
     <PackageReference Include="CSCore" Version="1.2.1.2" />
     <PackageReference Include="NVorbis" Version="0.10.4" />
-    <PackageReference Include="OpenTK" Version="3.3.2" />
+    <PackageReference Include="OpenTK.Mathematics" Version="4.7.4" />
+    <PackageReference Include="OpenTK.OpenAL" Version="4.7.4" />
     <PackageReference Include="taglib" Version="2.1.0.0" />
   </ItemGroup>
   <PropertyGroup />
+  <ItemGroup>
+    <EditorConfigFiles Remove="D:\Git\OALMPlayer\OpenAL Music Player\.editorconfig" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="D:\Git\OALMPlayer\OpenAL Music Player\.editorconfig" />
+  </ItemGroup>
 </Project>

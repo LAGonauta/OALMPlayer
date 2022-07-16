@@ -1,24 +1,20 @@
 ﻿using System;
 using System.Collections.Generic;
 
-using OALEngine;
 using System.Threading;
-using OpenTK.Audio;
+using OpenALMusicPlayer.AudioEngine;
+using OpenTK.Audio.OpenAL;
 
-namespace OpenALMusicPlayer
+namespace OpenALMusicPlayer.AudioPlayer
 {
-  class OpenALPlayer : IDisposable
+  class MusicPlayer : IDisposable
   {
 
     #region Fields
-    bool isValid;
-
-    // sound engine
-    OpenALEngine alengine;
-    bool isXFi = false;
+    private AudioEngine.AudioPlayer audioPlayer;
 
     // timer
-    System.Threading.Timer timer;
+    Timer timer;
     uint timerPeriod;
 
     // list with all file paths
@@ -28,24 +24,19 @@ namespace OpenALMusicPlayer
     PlayerState currentState;
     PlayerState lastState;
     int currentMusic;
-    float trackTotalTime = 0;
-    float trackCurrentTime = 0;
+    double trackTotalTime = 0;
+    double trackCurrentTime = 0;
     float volumePercentage = 100;
     float volume = 1f;
     float pitch = 1f;
 
     // Repeat
-    repeatType repeat_setting = repeatType.All;
-
-    // sound "effect"
-    OpenALSoundEffect music;
-
-    // EFX effects
-    int effect;
+    private RepeatType repeat_setting = RepeatType.All;
+    private bool disposedValue;
     #endregion
 
     #region Properties
-    public repeatType RepeatSetting
+    public RepeatType RepeatSetting
     {
       get
       {
@@ -102,7 +93,7 @@ namespace OpenALMusicPlayer
       {
         currentMusic = value - 1;
         currentState = PlayerState.ChangingTrack;
-        this.Now();
+        Now();
       }
     }
 
@@ -121,9 +112,9 @@ namespace OpenALMusicPlayer
         volumePercentage = value;
         //volume = 0.0031623f * (float)Math.Exp(volumePercentage / 100 * 5.757f);
         volume = (float)Math.Pow(volumePercentage / 100, 3);
-        if (music != null)
+        if (audioPlayer != null)
         {
-          music.Gain = volume;
+          audioPlayer.Gain = volume;
         }
       }
     }
@@ -138,9 +129,9 @@ namespace OpenALMusicPlayer
       set
       {
         pitch = value;
-        if (music != null)
+        if (audioPlayer != null)
         {
-          music.Pitch = pitch;
+          audioPlayer.Pitch = pitch;
         }
       }
     }
@@ -153,7 +144,7 @@ namespace OpenALMusicPlayer
       }
     }
 
-    public float TrackCurrentTime
+    public double TrackCurrentTime
     {
       get
       {
@@ -161,7 +152,7 @@ namespace OpenALMusicPlayer
       }
     }
 
-    public float TrackTotalTime
+    public double TrackTotalTime
     {
       get
       {
@@ -174,7 +165,7 @@ namespace OpenALMusicPlayer
     {
       get
       {
-        return isXFi;
+        return audioPlayer.IsXFi;
       }
     }
 
@@ -182,7 +173,7 @@ namespace OpenALMusicPlayer
     {
       get
       {
-        return alengine.GetXRamFree;
+        return audioPlayer.GetFreeXRam;
       }
     }
 
@@ -190,95 +181,28 @@ namespace OpenALMusicPlayer
     {
       get
       {
-        return alengine.GetXRamSize;
+        return audioPlayer.GetSizeXRam;
       }
     }
     #endregion
 
     #region Constructor
-    public OpenALPlayer(List<string> filePaths)
+    public MusicPlayer(List<string> filePaths, string device)
     {
-      isValid = true;
       currentState = PlayerState.Stopped;
       timerPeriod = 150;
       currentMusic = 0;
       volumePercentage = 100;
       pitch = 1f;
 
-      var devices = AudioContext.AvailableDevices;
-      alengine = new OpenALEngine(devices[0], true, AudioContext.MaxAuxiliarySends.One, true);
-
-      timer = new Timer(new TimerCallback(this.DetectChanges), null, timerPeriod, timerPeriod);
+      audioPlayer = new AudioEngine.AudioPlayer(device);
+      timer = new Timer(new TimerCallback(DetectChanges), null, timerPeriod, timerPeriod);
 
       if (filePaths != null)
       {
         musicList = filePaths;
       }
-
-      this.StartPlayer();
-    }
-
-    public OpenALPlayer(List<string> filePaths, string device)
-    {
-      isValid = true;
-      currentState = PlayerState.Stopped;
-      timerPeriod = 150;
-      currentMusic = 0;
-      volumePercentage = 100;
-      pitch = 1f;
-
-      alengine = new OpenALEngine(device, true, AudioContext.MaxAuxiliarySends.One, true);
-
-      timer = new Timer(new TimerCallback(this.DetectChanges), null, timerPeriod, timerPeriod);
-
-      if (filePaths != null)
-      {
-        musicList = filePaths;
-      }
-      this.StartPlayer();
-    }
-    #endregion
-
-    #region Destructor
-    protected virtual void Dispose(bool disposing)
-    {
-      if (disposing)
-      {
-        if (isValid)
-        {
-          isValid = false;
-
-          if (timer != null)
-          {
-            timer.Change(Timeout.Infinite, Timeout.Infinite);
-            timer.Dispose();
-            timer = null;
-          }
-
-          if (music != null)
-          {
-            music.Dispose();
-            music = null;
-          }
-
-          if (alengine != null)
-          {
-            alengine.Dispose();
-            alengine = null;
-          }
-        }
-      }
-    }
-
-    public void Dispose()
-    {
-      this.Dispose(true);
-      GC.SuppressFinalize(this);
-    }
-
-    ~OpenALPlayer()
-    {
-      this.Dispose();
+      StartPlayer();
     }
     #endregion
 
@@ -291,13 +215,13 @@ namespace OpenALMusicPlayer
     public void Play()
     {
       currentState = PlayerState.StartPlayback;
-      this.Now();
+      Now();
     }
 
     public void Stop()
     {
       currentState = PlayerState.StopPlayback;
-      this.Now();
+      Now();
     }
 
     public void NextTrack(bool force_next = true)
@@ -309,16 +233,16 @@ namespace OpenALMusicPlayer
       }
       else
       {
-        if (repeat_setting == repeatType.All)
+        if (repeat_setting == RepeatType.All)
         {
           currentMusic = (currentMusic + 1) % musicList.Count;
           currentState = PlayerState.ChangingTrack;
         }
-        else if (repeat_setting == repeatType.Song)
+        else if (repeat_setting == RepeatType.Song)
         {
           currentState = PlayerState.ChangingTrack;
         }
-        else if (repeat_setting == repeatType.No)
+        else if (repeat_setting == RepeatType.No)
         {
           if (currentMusic + 1 == musicList.Count)
           {
@@ -332,7 +256,7 @@ namespace OpenALMusicPlayer
         }
       }
 
-      this.Now();
+      Now();
     }
 
     public void PreviousTrack()
@@ -346,26 +270,26 @@ namespace OpenALMusicPlayer
         currentMusic = currentMusic - 1;
       }
       currentState = PlayerState.ChangingTrack;
-      this.Now();
+      Now();
     }
 
     public void Pause()
     {
       currentState = PlayerState.Pausing;
-      this.Now();
+      Now();
     }
 
     public void Unpause()
     {
       currentState = PlayerState.Unpausing;
-      this.Now();
+      Now();
     }
     #endregion
 
     #region Private methods
     private void StartPlayer()
     {
-      this.Now();
+      Now();
     }
 
     /// <summary>
@@ -388,7 +312,7 @@ namespace OpenALMusicPlayer
 
     private void DetectChanges(object obj)
     {
-      this.TimerDisable();
+      TimerDisable();
       switch (currentState)
       {
         case PlayerState.Stopped:
@@ -409,15 +333,12 @@ namespace OpenALMusicPlayer
           break;
 
         case PlayerState.Playing:
-          if (music != null)
+          if (audioPlayer != null && audioPlayer.State != ALSourceState.Playing)
           {
-            if (!music.IsPlaying)
-            {
-              this.NextTrack(false);
-            }
+            NextTrack(false);
           }
 
-          trackCurrentTime = music.CurrentTime;
+          trackCurrentTime = audioPlayer.CurrentTime;
 
           lastState = PlayerState.Playing;
           break;
@@ -428,67 +349,73 @@ namespace OpenALMusicPlayer
           break;
 
         case PlayerState.Pausing:
-          if (music != null)
+          if (audioPlayer != null)
           {
-            music.Pause();
+            audioPlayer.Pause();
           }
           currentState = PlayerState.Paused;
           lastState = PlayerState.Pausing;
           break;
 
         case PlayerState.Unpausing:
-          if (music != null)
+          if (audioPlayer != null)
           {
-            music.Unpause();
+            audioPlayer.Unpause();
           }
           currentState = PlayerState.Playing;
           lastState = PlayerState.Unpausing;
           break;
 
         case PlayerState.ChangingTrack:
-          if (music != null)
-            music.Dispose();
-
-          music = new OpenALSoundEffect(musicList[currentMusic], ref alengine, true);
-          trackTotalTime = music.TotalTime;
-          music.Play(volume);
-          music.Pitch = pitch;
+          trackTotalTime = audioPlayer.TotalTime;
+          audioPlayer.Gain = volume;
+          audioPlayer.Play(musicList[currentMusic], CancellationToken.None);
+          Thread.Sleep(10000);
+          audioPlayer.Pitch = pitch;
 
           currentState = PlayerState.Playing;
           lastState = PlayerState.ChangingTrack;
           break;
 
         case PlayerState.StopPlayback:
-          if (music != null)
-            music.Dispose();
-
+          audioPlayer.Stop();
           currentState = PlayerState.Stopped;
           lastState = PlayerState.StopPlayback;
           break;
       }
-      this.TimerEnable();
+      TimerEnable();
     }
-    #endregion
 
-    #region Enumerations
-    public enum PlayerState : byte
+    protected virtual void Dispose(bool disposing)
     {
-      Stopped,
-      StartPlayback,
-      Playing,
-      Paused,
-      ChangingTrack,
-      Pausing,
-      Unpausing,
-      StopPlayback
-    };
+      if (!disposedValue)
+      {
+        if (disposing)
+        {
+          if (timer != null)
+          {
+            timer.Change(Timeout.Infinite, Timeout.Infinite);
+            timer.Dispose();
+            timer = null;
+          }
 
-    public enum repeatType : byte
+          if (audioPlayer != null)
+          {
+            audioPlayer.Dispose();
+            audioPlayer = null;
+          }
+        }
+
+        disposedValue = true;
+      }
+    }
+
+    public void Dispose()
     {
-      No,
-      Song,
-      All
-    };
+      // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+      Dispose(disposing: true);
+      GC.SuppressFinalize(this);
+    }
     #endregion
   }
 }
