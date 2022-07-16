@@ -333,7 +333,7 @@ namespace OpenALMusicPlayer.AudioPlayer
           break;
 
         case PlayerState.Playing:
-          if (audioPlayer != null && audioPlayer.State != ALSourceState.Playing)
+          if (audioPlayer.State != ALSourceState.Playing)
           {
             NextTrack(false);
           }
@@ -349,19 +349,13 @@ namespace OpenALMusicPlayer.AudioPlayer
           break;
 
         case PlayerState.Pausing:
-          if (audioPlayer != null)
-          {
-            audioPlayer.Pause();
-          }
+          audioPlayer.Pause();
           currentState = PlayerState.Paused;
           lastState = PlayerState.Pausing;
           break;
 
         case PlayerState.Unpausing:
-          if (audioPlayer != null)
-          {
-            audioPlayer.Unpause();
-          }
+          audioPlayer.Unpause();
           currentState = PlayerState.Playing;
           lastState = PlayerState.Unpausing;
           break;
@@ -370,7 +364,6 @@ namespace OpenALMusicPlayer.AudioPlayer
           trackTotalTime = audioPlayer.TotalTime;
           audioPlayer.Gain = volume;
           audioPlayer.Play(musicList[currentMusic], CancellationToken.None);
-          Thread.Sleep(10000);
           audioPlayer.Pitch = pitch;
 
           currentState = PlayerState.Playing;
