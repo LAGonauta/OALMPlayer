@@ -2,17 +2,13 @@
 {
   internal class SimpleCancellationToken
   {
-    private bool canceled = false;
-    private readonly object lockObj = new();
+    private volatile bool canceled = false;
 
     public void Cancel()
     {
-      lock (lockObj)
-      {
-        canceled = true;
-      }
+      canceled = true;
     }
 
-    public bool IsCancellationRequested { get { lock (lockObj) { return canceled; } } }
+    public bool IsCancellationRequested => canceled;
   }
 }
