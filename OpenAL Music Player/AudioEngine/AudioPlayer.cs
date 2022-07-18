@@ -22,14 +22,13 @@ namespace OpenALMusicPlayer.AudioEngine
     private Dictionary<int, int> buffers = new();
     private XRamExtension xram;
     private bool hasXram = false;
+    private bool supportsOffset = false;
     private bool disposedValue;
 
     private readonly SemaphoreSlim playSemaphore = new SemaphoreSlim(1, 1);
     private readonly object lockObj = new();
     private SimpleCancellationToken simpleCancellationToken = new();
 
-    public double CurrentTime { get; private set; }
-    public double TotalTime { get; private set; }
     public bool IsValid => !disposedValue;
 
     public AudioPlayer(string device = null)
@@ -45,6 +44,7 @@ namespace OpenALMusicPlayer.AudioEngine
       source = AL.GenSource();
       xram = new XRamExtension();
       hasXram = xram.GetRamSize > 0;
+      supportsOffset = AL.IsExtensionPresent("AL_EXT_OFFSET");
     }
 
     public static async Task<IEnumerable<string>> AvailableDevices()
@@ -79,7 +79,6 @@ namespace OpenALMusicPlayer.AudioEngine
     {
       AL.SourceStop(source);
       var _ = UnqueueBuffers(source);
-      CurrentTime = 0.0f;
     }
 
     public void Pause()
@@ -112,7 +111,7 @@ namespace OpenALMusicPlayer.AudioEngine
         var localToken = NewCancellationToken();
         using var playReleaseToken = await playSemaphore.LockAsync();
         using var audioFile = GetAudioFile(filePath);
-        TotalTime = audioFile.GetLength().TotalMilliseconds / 1000;
+        var totalTime = audioFile.GetLength().TotalMilliseconds / 1000;
 
         const int streamingBufferTime = 1000; // in milliseconds
         var streamingBufferSize = (int)audioFile.GetRawElements(streamingBufferTime);
@@ -132,7 +131,7 @@ namespace OpenALMusicPlayer.AudioEngine
         }
 
         var interval = streamingBufferTime / streamingBufferQueueSize;
-        CurrentTime = 0;
+        var currentTime = 0.0;
         while (true)
         {
           if (localToken.IsCancellationRequested)
@@ -170,8 +169,16 @@ namespace OpenALMusicPlayer.AudioEngine
 
           // clear played buffers
           var processedBuffers = UnqueueBuffers(source);
-          CurrentTime += audioFile.GetMilliseconds(processedBuffers.Select(b => b.bufferSize).Sum()) / 1000;
-          timeUpdateCallback(CurrentTime, TotalTime);
+          currentTime += audioFile.GetMilliseconds(processedBuffers.Select(b => b.bufferSize).Sum()) / 1000;
+
+
+          var offset = 0.0f;
+          if (supportsOffset)
+          {
+            AL.GetSource(source, ALSourcef.SecOffset, out offset);
+          }
+
+          timeUpdateCallback(currentTime + offset, totalTime);
 
           await Task.Delay(interval);
         }
