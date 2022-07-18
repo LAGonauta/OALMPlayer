@@ -248,13 +248,18 @@ namespace OpenALMusicPlayer
       about_window.ShowDialog();
     }
 
-    private void playlistItem_MouseDoubleClick(object sender, RoutedEventArgs e)
+    private void PlaylistItem_MouseDoubleClick(object sender, RoutedEventArgs e)
     {
       if (playlistItems.SelectedIndex != -1)
       {
         SoundPlayPause.Content = "Pause";
         // is SelectedIndex zero indexed? Yes.
+        var status = player.Status;
         player.CurrentMusic = playlistItems.SelectedIndex + 1;
+        if (status == PlayerState.Stopped)
+        {
+          Play_Click(sender, e);
+        }
       }
     }
 

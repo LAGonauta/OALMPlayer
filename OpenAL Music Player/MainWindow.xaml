@@ -86,7 +86,7 @@
                         </ListView.View>
                         <ListView.ItemContainerStyle>
                             <Style TargetType="{x:Type ListViewItem}">
-                                <EventSetter Event="MouseDoubleClick" Handler="playlistItem_MouseDoubleClick"/>
+                                <EventSetter Event="MouseDoubleClick" Handler="PlaylistItem_MouseDoubleClick"/>
                             </Style>
                         </ListView.ItemContainerStyle>
                     </ListView>

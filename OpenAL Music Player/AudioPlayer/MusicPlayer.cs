@@ -202,8 +202,7 @@ namespace OpenALMusicPlayer.AudioPlayer
           {
             trackTotalTime = total;
             trackCurrentTime = current;
-          },
-          CancellationToken.None);
+          });
         if (currentState == PlayerState.Playing)
         {
           NextTrack(false);

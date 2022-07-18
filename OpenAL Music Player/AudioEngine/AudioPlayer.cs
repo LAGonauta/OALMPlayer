@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using CSCore;
 using CSCore.Codecs;
 using CSCore.Streams.SampleConverter;
+using OpenALMusicPlayer.Helpers;
 using OpenTK.Audio.OpenAL;
 using OpenTK.Audio.OpenAL.Extensions.Creative.EnumerateAll;
 using OpenTK.Audio.OpenAL.Extensions.EXT.Float32;
@@ -18,14 +19,14 @@ namespace OpenALMusicPlayer.AudioEngine
     private ALDevice device;
     private ALContext context;
     private int source;
-    private Dictionary<int, int> buffers;
+    private Dictionary<int, int> buffers = new();
     private XRamExtension xram;
     private bool hasXram = false;
     private bool disposedValue;
-    private ulong stopping = 0; // 1 = true, 0 = false. Required for atomicicity.
 
-    private static readonly string mutexName = "audioplayer.play";
-    private readonly Mutex mutex = new Mutex(false, mutexName);
+    private readonly SemaphoreSlim playSemaphore = new SemaphoreSlim(1, 1);
+    private readonly object lockObj = new();
+    private SimpleCancellationToken simpleCancellationToken = new();
 
     public double CurrentTime { get; private set; }
     public double TotalTime { get; private set; }
@@ -43,7 +44,6 @@ namespace OpenALMusicPlayer.AudioEngine
       ALC.MakeContextCurrent(context);
       source = AL.GenSource();
       xram = new XRamExtension();
-      buffers = new Dictionary<int, int>();
       hasXram = xram.GetRamSize > 0;
     }
 
@@ -69,7 +69,10 @@ namespace OpenALMusicPlayer.AudioEngine
 
     public void Stop()
     {
-      Interlocked.Exchange(ref stopping, 1);
+      lock (lockObj)
+      {
+        simpleCancellationToken.Cancel();
+      }
     }
 
     private void StopInternal()
@@ -102,13 +105,12 @@ namespace OpenALMusicPlayer.AudioEngine
       }
     }
 
-    public async Task Play(string filePath, Action<double, double> timeUpdateCallback, CancellationToken cancellationToken)
+    public async Task Play(string filePath, Action<double, double> timeUpdateCallback)
     {
       await Task.Run(async () =>
       {
-        using var playMutex = Mutex.OpenExisting(mutexName);
-        Interlocked.Exchange(ref stopping, 0);
-        StopInternal();
+        var localToken = NewCancellationToken();
+        using var playReleaseToken = await playSemaphore.LockAsync();
         using var audioFile = GetAudioFile(filePath);
         TotalTime = audioFile.GetLength().TotalMilliseconds / 1000;
 
@@ -133,18 +135,18 @@ namespace OpenALMusicPlayer.AudioEngine
         CurrentTime = 0;
         while (true)
         {
-          if (Interlocked.Read(ref stopping) == 1)
+          if (localToken.IsCancellationRequested)
           {
-            Interlocked.Exchange(ref stopping, 0);
             StopInternal();
-            if (IsXFi)
+            if (!IsXFi)
             {
-              return;
+              AL.SourceRewind(source);
             }
+            return;
           }
 
           var state = AL.GetSourceState(source);
-          if (state == ALSourceState.Stopped || cancellationToken.IsCancellationRequested)
+          if (state == ALSourceState.Stopped)
           {
             AL.SourceRewind(source);
             return;
@@ -171,9 +173,20 @@ namespace OpenALMusicPlayer.AudioEngine
           CurrentTime += audioFile.GetMilliseconds(processedBuffers.Select(b => b.bufferSize).Sum()) / 1000;
           timeUpdateCallback(CurrentTime, TotalTime);
 
-          await Task.Delay(interval, cancellationToken);
+          await Task.Delay(interval);
         }
-      }, cancellationToken);
+      });
+    }
+
+    private SimpleCancellationToken NewCancellationToken()
+    {
+      lock (lockObj)
+      {
+        simpleCancellationToken.Cancel();
+        var newToken = new SimpleCancellationToken();
+        simpleCancellationToken = newToken;
+        return newToken;
+      }
     }
 
     private void QueueBuffer(IWaveSource audioFile, int streamingBufferSize, int streamingBufferQueueSize)
@@ -402,10 +415,11 @@ namespace OpenALMusicPlayer.AudioEngine
       if (!disposedValue)
       {
         Stop();
+        playSemaphore.Wait();
 
         if (disposing)
         {
-          //mutex.Dispose();
+          playSemaphore.Dispose();
         }
 
         foreach (var buffer in buffers)
