@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
-using System.Threading;
 using System.Windows;
 using System.Windows.Forms;
 using System.Windows.Controls;
@@ -11,11 +10,7 @@ using System.Linq;
 
 using CSCore;
 using CSCore.Codecs;
-using TagLib;
-using OpenTK.Audio;
-using OpenTK.Audio.OpenAL;
 using System.Reflection;
-using OpenALMusicPlayer.AudioEngine;
 using System.Threading.Tasks;
 using OpenALMusicPlayer.AudioPlayer;
 
@@ -83,7 +78,7 @@ namespace OpenALMusicPlayer
       {
         foreach (var path in Properties.Settings.Default.LastPlaylist)
         {
-          if (System.IO.File.Exists(path))
+          if (File.Exists(path))
           {
             filePaths.Add(path);
           }
@@ -114,14 +109,14 @@ namespace OpenALMusicPlayer
       // Starting CPU usage timer
       total_cpu_usage = theCPUCounter.NextValue();
       this.UpdateCPUUsage(null, null);
-      var CPUTimer = new System.Windows.Forms.Timer();
+      var CPUTimer = new Timer();
       CPUTimer.Interval = 2000;
       CPUTimer.Tick += new EventHandler(this.UpdateCPUUsage);
       CPUTimer.Start();
 
       // Starting GUI information update timer
       this.UpdateCPUUsage(null, null);
-      InfoText = new System.Windows.Forms.Timer();
+      InfoText = new Timer();
       InfoText.Interval = 150;
       InfoText.Tick += new EventHandler(this.UpdateInfoText);
       InfoText.Start();
@@ -133,24 +128,29 @@ namespace OpenALMusicPlayer
       UpdateDeviceList(devices);
     }
 
-    public void GeneratePlaylist()
+    public async Task GeneratePlaylist()
     {
       items.Clear();
-      filePaths
-        .Select((path, index) =>
-        {
-          TagLib.File file = TagLib.File.Create(path);
-          return new PlaylistItemsList()
+      var playlistItems = await Task.Run(() =>
+      {
+        return filePaths
+          .Select((path, index) =>
           {
-            Number = (index + 1).ToString(),
-            Title = file.Tag.Title,
-            Performer = file.Tag.FirstPerformer,
-            Album = file.Tag.Album,
-            FileName = Path.GetFileName(path)
-          };
-        })
-        .ToList()
-        .ForEach(item => items.Add(item));
+            TagLib.File file = TagLib.File.Create(path);
+            return new PlaylistItemsList()
+            {
+              Number = (index + 1).ToString(),
+              Title = file.Tag.Title,
+              Performer = file.Tag.FirstPerformer,
+              Album = file.Tag.Album,
+              FileName = Path.GetFileName(path)
+            };
+          })
+          .ToList();
+      });
+
+      playlistItems
+          .ForEach(item => items.Add(item));
 
       if (player != null)
       {
@@ -159,24 +159,23 @@ namespace OpenALMusicPlayer
     }
 
     #region GUI stuff
-    private void Open_Click(object sender, RoutedEventArgs e)
+    private async void Open_Click(object sender, RoutedEventArgs e)
     {
-      using (FolderBrowserDialog dlgOpen = new FolderBrowserDialog())
+      using (var dlgOpen = new FolderBrowserDialog())
       {
         dlgOpen.Description = "Escolha a pasta para tocar";
 
-        System.Windows.Forms.DialogResult result = dlgOpen.ShowDialog();
+        var result = dlgOpen.ShowDialog();
 
         if (result == System.Windows.Forms.DialogResult.OK)
         {
-          Thread.Sleep(250); // So we are sure that notthing bad happens...
           var allowedExtensions = new[] { ".mp3", ".wav", ".wma", ".ogg", ".flac", ".mp4", ".m4a", ".ac3" };
           filePaths.Clear();
           foreach (var path in Directory.GetFiles(dlgOpen.SelectedPath).Where(file => allowedExtensions.Any(file.ToLower().EndsWith)))
           {
             filePaths.Add(path);
           }
-          GeneratePlaylist();
+          await GeneratePlaylist();
         }
       }
     }
@@ -318,7 +317,7 @@ namespace OpenALMusicPlayer
             current_music_text_display.Text = player.CurrentMusic.ToString();
           }
 
-          var pos_text = $"{(int)current_time.TotalMinutes}:{current_time.Seconds.ToString("00")} / {(int)total_time.TotalMinutes}:{total_time.Seconds.ToString("00")}";
+          var pos_text = $"{(int)current_time.TotalMinutes}:{current_time.Seconds:00} / {(int)total_time.TotalMinutes}:{total_time.Seconds:00}";
           if (position_text_display.Text != pos_text)
           {
             position_text_display.Text = pos_text;
@@ -440,26 +439,6 @@ namespace OpenALMusicPlayer
       ni.Visible = false;
     }
     #endregion
-
-    //        var waveBuffer = new WaveBuffer(buffer);
-
-    //        // Convert to 16-bit
-    //        int read = waveBuffer.FloatBuffer.Length;
-    //        short[] sampleBufferShort = new short[waveBuffer.FloatBuffer.Length / 4];
-
-    //        for (uint i = 0; i < read / 4; ++i)
-    //        {
-    //            waveBuffer.FloatBuffer[i] = waveBuffer.FloatBuffer[i] * (1 << 15);
-
-    //            if (waveBuffer.FloatBuffer[i] > 32767)
-    //                sampleBufferShort[i] = 32767;
-    //            else if (waveBuffer.FloatBuffer[i] < -32768)
-    //                sampleBufferShort[i] = -32768;
-    //            else
-    //                sampleBufferShort[i] = (short)(waveBuffer.FloatBuffer[i]);
-    //        }
-
-    //        return sampleBufferShort.SelectMany(x => BitConverter.GetBytes(x)).ToArray();
 
     public static int[] PitchCorrection(float rate)
     {
