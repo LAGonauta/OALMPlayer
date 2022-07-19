@@ -356,7 +356,6 @@ namespace OpenALMusicPlayer.AudioEngine
               if (IsXFi)
               {
                 throw new NotSupportedException("The specified sound format is not supported.");
-                //return 0x1203;
               }
               else
               {
@@ -385,8 +384,8 @@ namespace OpenALMusicPlayer.AudioEngine
             {
               if (IsXFi)
               {
-                // Undocumented value
-                return (ALFormat)0x1203;
+                // Undocumented enum
+                return (ALFormat)AL.GetEnumValue("AL_FORMAT_STEREO32");
               }
               else
               {
