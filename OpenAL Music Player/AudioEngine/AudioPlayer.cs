@@ -132,6 +132,7 @@ namespace OpenALMusicPlayer.AudioEngine
 
         var interval = streamingBufferTime / streamingBufferQueueSize;
         var currentTime = 0.0;
+        var soundData = new byte[streamingBufferSize];
         while (true)
         {
           if (localToken.IsCancellationRequested)
@@ -154,13 +155,10 @@ namespace OpenALMusicPlayer.AudioEngine
           // queue new buffers
           if (state == ALSourceState.Initial)
           {
-            QueueBuffer(audioFile, streamingBufferSize, streamingBufferQueueSize);
-            QueueBuffer(audioFile, streamingBufferSize, streamingBufferQueueSize);
-            QueueBuffer(audioFile, streamingBufferSize, streamingBufferQueueSize);
-            QueueBuffer(audioFile, streamingBufferSize, streamingBufferQueueSize);
-            QueueBuffer(audioFile, streamingBufferSize, streamingBufferQueueSize);
+            QueueBuffer(audioFile, soundData, streamingBufferQueueSize);
+            QueueBuffer(audioFile, soundData, streamingBufferQueueSize);
           }
-          QueueBuffer(audioFile, streamingBufferSize, streamingBufferQueueSize);
+          QueueBuffer(audioFile, soundData, streamingBufferQueueSize);
 
           if (state != ALSourceState.Playing && state != ALSourceState.Paused)
           {
@@ -196,7 +194,7 @@ namespace OpenALMusicPlayer.AudioEngine
       }
     }
 
-    private void QueueBuffer(IWaveSource audioFile, int streamingBufferSize, int streamingBufferQueueSize)
+    private void QueueBuffer(IWaveSource audioFile, byte[] soundData, int streamingBufferQueueSize)
     {
       if (audioFile.Position < audioFile.Length)
       {
@@ -205,16 +203,15 @@ namespace OpenALMusicPlayer.AudioEngine
 
         if (buffersQueued < streamingBufferQueueSize && audioFile.Position < audioFile.Length)
         {
-          var size = audioFile.Length - audioFile.Position < streamingBufferSize
+          var size = audioFile.Length - audioFile.Position < soundData.Length
             ? (int)(audioFile.Length - audioFile.Position)
-            : streamingBufferSize;
+            : soundData.Length;
 
-          var sound_data = new byte[size];
-          audioFile.Read(sound_data, 0, sound_data.Length);
+          audioFile.Read(soundData, 0, size);
 
           var soundBuffer = AL.GenBuffer();
           var format = GetSoundFormat(audioFile.WaveFormat.Channels, audioFile.WaveFormat.BitsPerSample);
-          AL.BufferData(soundBuffer, format, ref sound_data[0], sound_data.Length, audioFile.WaveFormat.SampleRate);
+          AL.BufferData(soundBuffer, format, ref soundData[0], size, audioFile.WaveFormat.SampleRate);
           CheckALError("buffering data");
           buffers.Add(soundBuffer, size);
 
