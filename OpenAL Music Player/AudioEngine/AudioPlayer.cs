@@ -279,7 +279,11 @@ namespace OpenALMusicPlayer.AudioEngine
       try
       {
         audioFile = CodecFactory.Instance.GetCodec(filePath);
-        if (IsXFi && audioFile.WaveFormat.WaveFormatTag == AudioEncoding.IeeeFloat)
+        if (audioFile.WaveFormat.BitsPerSample == 24)
+        {
+          audioFile = new SampleToPcm32(audioFile.ToSampleSource());
+        }
+        else if (IsXFi && audioFile.WaveFormat.WaveFormatTag == AudioEncoding.IeeeFloat)
         {
           var sampleSource = audioFile.ToSampleSource();
           if (audioFile.WaveFormat.BitsPerSample == 32)
