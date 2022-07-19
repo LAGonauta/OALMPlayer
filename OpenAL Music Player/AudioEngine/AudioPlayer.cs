@@ -169,7 +169,6 @@ namespace OpenALMusicPlayer.AudioEngine
           var processedBuffers = UnqueueBuffers(source);
           currentTime += audioFile.GetMilliseconds(processedBuffers.Select(b => b.bufferSize).Sum()) / 1000;
 
-
           var offset = 0.0f;
           if (supportsOffset)
           {
@@ -278,14 +277,14 @@ namespace OpenALMusicPlayer.AudioEngine
         audioFile = CodecFactory.Instance.GetCodec(filePath);
         if (audioFile.WaveFormat.BitsPerSample == 24)
         {
-          audioFile = new SampleToPcm32(audioFile.ToSampleSource());
+          audioFile = new LocalSampleToPcm32(audioFile.ToSampleSource());
         }
         else if (IsXFi && audioFile.WaveFormat.WaveFormatTag == AudioEncoding.IeeeFloat)
         {
           var sampleSource = audioFile.ToSampleSource();
           if (audioFile.WaveFormat.BitsPerSample == 32)
           {
-            audioFile = new SampleToPcm32(sampleSource);
+            audioFile = new LocalSampleToPcm32(sampleSource);
           }
           else if (audioFile.WaveFormat.BitsPerSample == 16)
           {
