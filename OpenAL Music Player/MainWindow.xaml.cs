@@ -74,17 +74,6 @@ namespace OpenALMusicPlayer
       };
 
       // Set GUI
-      if (Properties.Settings.Default.LastPlaylist != null)
-      {
-        foreach (var path in Properties.Settings.Default.LastPlaylist)
-        {
-          if (File.Exists(path))
-          {
-            filePaths.Add(path);
-          }
-        }
-        GeneratePlaylist();
-      }
       playlistItems.ItemsSource = items;
 
       speed_slider.Value = Properties.Settings.Default.Speed;
@@ -126,6 +115,17 @@ namespace OpenALMusicPlayer
     {
       var devices = await AudioEngine.AudioPlayer.AvailableDevices();
       UpdateDeviceList(devices);
+      if (Properties.Settings.Default.LastPlaylist != null)
+      {
+        foreach (var path in Properties.Settings.Default.LastPlaylist)
+        {
+          if (File.Exists(path))
+          {
+            filePaths.Add(path);
+          }
+        }
+        await GeneratePlaylist();
+      }
     }
 
     public async Task GeneratePlaylist()
