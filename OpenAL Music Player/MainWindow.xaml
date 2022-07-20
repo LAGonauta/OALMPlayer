@@ -6,6 +6,7 @@
         xmlns:local="clr-namespace:OpenALMusicPlayer"
         mc:Ignorable="d"
         Title="OpenAL Music Player" MinHeight="480" MinWidth="640" Height="600" Width="800"
+        Loaded="Window_Loaded"
         Closing="Window_Closing">
 
     <Grid>
@@ -85,7 +86,7 @@
                         </ListView.View>
                         <ListView.ItemContainerStyle>
                             <Style TargetType="{x:Type ListViewItem}">
-                                <EventSetter Event="MouseDoubleClick" Handler="playlistItem_MouseDoubleClick"/>
+                                <EventSetter Event="MouseDoubleClick" Handler="PlaylistItem_MouseDoubleClick"/>
                             </Style>
                         </ListView.ItemContainerStyle>
                     </ListView>

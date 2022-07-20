@@ -47,7 +47,7 @@ namespace OpenALMusicPlayer
     {
       get
       {
-        return CanSeek ? (long)(_vorbisReader.DecodedTime.TotalSeconds * _vorbisReader.SampleRate * _vorbisReader.Channels) : 0;
+        return CanSeek ? (long)(_vorbisReader.TimePosition.TotalSeconds * _vorbisReader.SampleRate * _vorbisReader.Channels) : 0;
       }
       set
       {
@@ -56,7 +56,7 @@ namespace OpenALMusicPlayer
         if (value < 0 || value > Length)
           throw new ArgumentOutOfRangeException("value");
 
-        _vorbisReader.DecodedTime = TimeSpan.FromSeconds((double)value / _vorbisReader.SampleRate / _vorbisReader.Channels);
+        _vorbisReader.TimePosition = TimeSpan.FromSeconds((double)value / _vorbisReader.SampleRate / _vorbisReader.Channels);
       }
     }
 
