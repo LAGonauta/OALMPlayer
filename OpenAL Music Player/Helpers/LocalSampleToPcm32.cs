@@ -23,7 +23,7 @@ namespace OpenALMusicPlayer.Helpers
       int read = Source.Read(Buffer, 0, count / 4);
       int bufferOffset = offset;
 
-      Span<byte> bytes = stackalloc byte[4];
+      Span<byte> bytes = stackalloc byte[sizeof(Int32)];
       for (int i = 0; i < read; i++)
       {
         int value = (int)(Buffer[i] * int.MaxValue);
