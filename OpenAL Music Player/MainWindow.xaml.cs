@@ -209,33 +209,33 @@ namespace OpenALMusicPlayer
       }
     }
 
-    private void Next_Click(object sender, RoutedEventArgs e)
+    private async void Next_Click(object sender, RoutedEventArgs e)
     {
       if (filePaths != null)
       {
         if (filePaths.Count > 0)
         {
           SoundPlayPause.Content = "Pause";
-          player.NextTrack();
+          await player.NextTrack();
           playlistItems.SelectedIndex = player.CurrentMusic - 1;
         }
       }
     }
 
-    private void Stop_Click(object sender, RoutedEventArgs e)
+    private async void Stop_Click(object sender, RoutedEventArgs e)
     {
       SoundPlayPause.Content = "Play";
-      player.Stop();
+      await player.Stop();
     }
 
-    private void Back_Click(object sender, RoutedEventArgs e)
+    private async void Back_Click(object sender, RoutedEventArgs e)
     {
       if (filePaths != null)
       {
         if (filePaths.Count > 0)
         {
           SoundPlayPause.Content = "Pause";
-          player.PreviousTrack();
+          await player.PreviousTrack();
           playlistItems.SelectedIndex = player.CurrentMusic - 1;
         }
       }
@@ -247,14 +247,14 @@ namespace OpenALMusicPlayer
       about_window.ShowDialog();
     }
 
-    private void PlaylistItem_MouseDoubleClick(object sender, RoutedEventArgs e)
+    private async void PlaylistItem_MouseDoubleClick(object sender, RoutedEventArgs e)
     {
       if (playlistItems.SelectedIndex != -1)
       {
         SoundPlayPause.Content = "Pause";
         // is SelectedIndex zero indexed? Yes.
         var status = player.Status;
-        player.CurrentMusic = playlistItems.SelectedIndex + 1;
+        await player.SetCurrentMusic(playlistItems.SelectedIndex + 1);
         if (status == PlayerState.Stopped)
         {
           Play_Click(sender, e);

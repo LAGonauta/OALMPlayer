@@ -67,13 +67,13 @@ namespace OpenALMusicPlayer.AudioPlayer
       {
         return currentMusic + 1;
       }
+    }
 
-      set
-      {
-        currentMusic = value - 1;
-        currentState = PlayerState.ChangingTrack;
-        audioPlayer.Stop();
-      }
+    public async Task SetCurrentMusic(int value)
+    {
+      currentMusic = value - 1;
+      currentState = PlayerState.ChangingTrack;
+      await audioPlayer.Stop();
     }
 
     /// <summary>
@@ -205,7 +205,7 @@ namespace OpenALMusicPlayer.AudioPlayer
           });
         if (currentState == PlayerState.Playing)
         {
-          NextTrack(false);
+          await NextTrack(false);
         }
         if (currentState == PlayerState.ChangingTrack)
         {
@@ -214,13 +214,13 @@ namespace OpenALMusicPlayer.AudioPlayer
       }
     }
 
-    public void Stop()
+    public async Task Stop()
     {
       currentState = PlayerState.Stopped;
-      audioPlayer.Stop();
+      await audioPlayer.Stop();
     }
 
-    public void NextTrack(bool force_next = true)
+    public async Task NextTrack(bool force_next = true)
     {
       if (force_next)
       {
@@ -254,11 +254,11 @@ namespace OpenALMusicPlayer.AudioPlayer
       var player = audioPlayer;
       if (player != null)
       {
-        audioPlayer.Stop();
+        await audioPlayer.Stop();
       }
     }
 
-    public void PreviousTrack()
+    public async Task PreviousTrack()
     {
       if (currentMusic == 0)
       {
@@ -269,7 +269,7 @@ namespace OpenALMusicPlayer.AudioPlayer
         currentMusic = currentMusic - 1;
       }
       currentState = PlayerState.ChangingTrack;
-      audioPlayer.Stop();
+      await audioPlayer.Stop();
     }
 
     public void Pause()
