@@ -275,24 +275,53 @@ namespace OpenALMusicPlayer.AudioEngine
       try
       {
         audioFile = CodecFactory.Instance.GetCodec(filePath);
-        if (audioFile.WaveFormat.BitsPerSample == 24)
+        if (audioFile.WaveFormat.WaveFormatTag != AudioEncoding.IeeeFloat
+          && audioFile.WaveFormat.WaveFormatTag != AudioEncoding.Pcm)
         {
-          audioFile = new LocalSampleToPcm32(audioFile.ToSampleSource());
+          audioFile = new LocalSampleToPcm16(audioFile.ToSampleSource());
         }
-        else if (IsXFi && audioFile.WaveFormat.WaveFormatTag == AudioEncoding.IeeeFloat)
+
+        if (audioFile.WaveFormat.WaveFormatTag == AudioEncoding.IeeeFloat)
         {
-          var sampleSource = audioFile.ToSampleSource();
-          if (audioFile.WaveFormat.BitsPerSample == 32)
+          if (!EXTFloat32.IsExtensionPresent())
           {
-            audioFile = new LocalSampleToPcm32(sampleSource);
+            if (IsXFi)
+            {
+              audioFile = new LocalSampleToPcm32(audioFile.ToSampleSource());
+            }
+            else
+            {
+              audioFile = new LocalSampleToPcm16(audioFile.ToSampleSource());
+            }
           }
-          else if (audioFile.WaveFormat.BitsPerSample == 16)
+        }
+        else if (audioFile.WaveFormat.BitsPerSample == 32)
+        {
+          if (!IsXFi)
           {
-            audioFile = new SampleToPcm16(sampleSource);
+            if (EXTFloat32.IsExtensionPresent())
+            {
+              audioFile = new SampleToIeeeFloat32(audioFile.ToSampleSource());
+            }
+            else
+            {
+              audioFile = new LocalSampleToPcm16(audioFile.ToSampleSource());
+            }
+          }
+        }
+        else if (audioFile.WaveFormat.BitsPerSample == 24)
+        {
+          if (IsXFi)
+          {
+            audioFile = new LocalSampleToPcm32(audioFile.ToSampleSource());
+          }
+          else if (EXTFloat32.IsExtensionPresent())
+          {
+            audioFile = new SampleToIeeeFloat32(audioFile.ToSampleSource());
           }
           else
           {
-            audioFile = new SampleToPcm8(sampleSource);
+            audioFile = new LocalSampleToPcm16(audioFile.ToSampleSource());
           }
         }
 
