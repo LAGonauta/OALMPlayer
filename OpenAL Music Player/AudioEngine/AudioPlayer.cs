@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
-using System.Threading.Channels;
 using System.Threading.Tasks;
 using CSCore;
 using CSCore.Codecs;
@@ -26,8 +25,8 @@ namespace OpenALMusicPlayer.AudioEngine
     private bool disposedValue = false;
 
     private readonly SemaphoreSlim playSemaphore = new SemaphoreSlim(1, 1);
-    private uint playId = 1;
-    private readonly Channel<uint> stopChannel = Channel.CreateUnbounded<uint>();
+    private readonly object lockObj = new();
+    private SimpleCancellationToken simpleCancellationToken = new();
 
     public bool IsValid => !disposedValue;
 
@@ -67,9 +66,12 @@ namespace OpenALMusicPlayer.AudioEngine
       }
     }
 
-    public async Task Stop()
+    public void Stop()
     {
-      await stopChannel.Writer.WriteAsync(0);
+      lock (lockObj)
+      {
+        simpleCancellationToken.Cancel();
+      }
     }
 
     public void Pause()
@@ -99,9 +101,7 @@ namespace OpenALMusicPlayer.AudioEngine
     {
       await Task.Run(async () =>
       {
-        var localId = Interlocked.Add(ref playId, 1);
-        await stopChannel.Writer.WriteAsync(localId);
-
+        var localToken = NewCancellationToken();
         using var playReleaseToken = await playSemaphore.LockAsync();
         using var audioFile = GetAudioFile(filePath);
         var totalTime = audioFile.GetLength().TotalMilliseconds / 1000;
@@ -129,7 +129,7 @@ namespace OpenALMusicPlayer.AudioEngine
         using var bufferPool = new BufferPool(hasXram);
         while (true)
         {
-          if (stopChannel.Reader.TryRead(out var id) && id != localId)
+          if (localToken.IsCancellationRequested)
           {
             AL.SourceStop(source);
             var _ = UnqueueBuffers(source, bufferPool);
@@ -179,6 +179,17 @@ namespace OpenALMusicPlayer.AudioEngine
           await Task.Delay(interval);
         }
       });
+    }
+
+    private SimpleCancellationToken NewCancellationToken()
+    {
+      lock (lockObj)
+      {
+        simpleCancellationToken.Cancel();
+        var newToken = new SimpleCancellationToken();
+        simpleCancellationToken = newToken;
+        return newToken;
+      }
     }
 
     private void QueueBuffer(IWaveSource audioFile, byte[] soundData, int streamingBufferQueueSize, BufferPool bufferPool)
