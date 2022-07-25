@@ -106,10 +106,10 @@ namespace OpenALMusicPlayer.AudioEngine
         using var audioFile = GetAudioFile(filePath);
         var totalTime = audioFile.GetLength().TotalMilliseconds / 1000.0;
 
-        const int streamingBufferTime = 500; // in milliseconds
+        const int streamingBufferTime = 1000; // in milliseconds
         var streamingBufferSize = (int)audioFile.GetRawElements(streamingBufferTime);
 
-        var streamingBufferQueueSize = 10; // get from gui
+        var streamingBufferQueueSize = 5; // get from gui
         if (IsXFi)
         {
           if (streamingBufferQueueSize > GetFreeXRam / streamingBufferSize)
@@ -123,7 +123,7 @@ namespace OpenALMusicPlayer.AudioEngine
           streamingBufferQueueSize = 3;
         }
 
-        var interval = streamingBufferTime / 2;
+        var interval = TimeSpan.FromMilliseconds(100);
         var currentTime = 0.0;
         var soundData = new byte[streamingBufferSize];
         var initialized = false;
@@ -162,6 +162,7 @@ namespace OpenALMusicPlayer.AudioEngine
           if (state != ALSourceState.Playing && state != ALSourceState.Paused)
           {
             AL.SourcePlay(source);
+            CheckALError("playing");
             initialized = true;
           }
 
@@ -287,7 +288,8 @@ namespace OpenALMusicPlayer.AudioEngine
       {
         audioFile = CodecFactory.Instance.GetCodec(filePath);
         if (audioFile.WaveFormat.WaveFormatTag != AudioEncoding.IeeeFloat
-          && audioFile.WaveFormat.WaveFormatTag != AudioEncoding.Pcm)
+          && audioFile.WaveFormat.WaveFormatTag != AudioEncoding.Pcm
+          && audioFile.WaveFormat.WaveFormatTag != AudioEncoding.Extensible)
         {
           audioFile = new LocalSampleToPcm16(audioFile.ToSampleSource());
         }
