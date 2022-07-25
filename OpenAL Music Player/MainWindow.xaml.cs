@@ -117,6 +117,7 @@ namespace OpenALMusicPlayer
       UpdateDeviceList(devices);
       if (Properties.Settings.Default.LastPlaylist != null)
       {
+        filePaths = new List<string>();
         foreach (var path in Properties.Settings.Default.LastPlaylist)
         {
           if (File.Exists(path))
@@ -124,11 +125,11 @@ namespace OpenALMusicPlayer
             filePaths.Add(path);
           }
         }
-        await GeneratePlaylist();
+        await GeneratePlaylist(filePaths);
       }
     }
 
-    public async Task GeneratePlaylist()
+    public async Task GeneratePlaylist(List<string> filePaths)
     {
       items.Clear();
       var playlistItems = await Task.Run(() =>
@@ -181,13 +182,11 @@ namespace OpenALMusicPlayer
 
         if (result == System.Windows.Forms.DialogResult.OK)
         {
-          var allowedExtensions = new[] { ".mp3", ".wav", ".wma", ".ogg", ".flac", ".mp4", ".m4a", ".ac3" };
-          filePaths.Clear();
-          foreach (var path in Directory.GetFiles(dlgOpen.SelectedPath).Where(file => allowedExtensions.Any(file.ToLower().EndsWith)))
-          {
-            filePaths.Add(path);
-          }
-          await GeneratePlaylist();
+          var allowedExtensions = CodecFactory.Instance.GetSupportedFileExtensions();
+          filePaths = Directory.GetFiles(dlgOpen.SelectedPath)
+            .Where(file => allowedExtensions.Any(file.ToLowerInvariant().EndsWith))
+            .ToList();
+          await GeneratePlaylist(filePaths);
         }
       }
     }
