@@ -136,15 +136,27 @@ namespace OpenALMusicPlayer
         return filePaths
           .Select((path, index) =>
           {
-            TagLib.File file = TagLib.File.Create(path);
-            return new PlaylistItemsList()
+            try
             {
-              Number = (index + 1).ToString(),
-              Title = file.Tag.Title,
-              Performer = file.Tag.FirstPerformer,
-              Album = file.Tag.Album,
-              FileName = Path.GetFileName(path)
-            };
+              var file = TagLib.File.Create(path);
+              return new PlaylistItemsList()
+              {
+                Number = (index + 1).ToString(),
+                Title = file.Tag.Title,
+                Performer = file.Tag.FirstPerformer,
+                Album = file.Tag.Album,
+                FileName = Path.GetFileName(path)
+              };
+            }
+            catch (TagLib.UnsupportedFormatException ex)
+            {
+              Trace.WriteLine($"Format not supported: {ex.Message}");
+              return new PlaylistItemsList()
+              {
+                Number = (index + 1).ToString(),
+                FileName = Path.GetFileName(path)
+              };
+            }
           })
           .ToList();
       });
