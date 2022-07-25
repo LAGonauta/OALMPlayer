@@ -104,12 +104,12 @@ namespace OpenALMusicPlayer.AudioEngine
         var localToken = NewCancellationToken();
         using var playReleaseToken = await playSemaphore.LockAsync();
         using var audioFile = GetAudioFile(filePath);
-        var totalTime = audioFile.GetLength().TotalMilliseconds / 1000;
+        var totalTime = audioFile.GetLength().TotalMilliseconds / 1000.0;
 
-        const int streamingBufferTime = 1000; // in milliseconds
+        const int streamingBufferTime = 500; // in milliseconds
         var streamingBufferSize = (int)audioFile.GetRawElements(streamingBufferTime);
 
-        var streamingBufferQueueSize = 100; // get from gui
+        var streamingBufferQueueSize = 10; // get from gui
         if (IsXFi)
         {
           if (streamingBufferQueueSize > GetFreeXRam / streamingBufferSize)
@@ -123,50 +123,47 @@ namespace OpenALMusicPlayer.AudioEngine
           streamingBufferQueueSize = 3;
         }
 
-        var interval = streamingBufferTime / streamingBufferQueueSize;
+        var interval = streamingBufferTime / 2;
         var currentTime = 0.0;
         var soundData = new byte[streamingBufferSize];
+        var initialized = false;
         using var bufferPool = new BufferPool(hasXram);
         while (true)
         {
           if (localToken.IsCancellationRequested)
           {
-            AL.SourceStop(source);
-            var _ = UnqueueBuffers(source, bufferPool);
-            while (AL.SourceUnqueueBuffer(source) > 0) { }
-            AL.SourceRewind(source);
+            FinishUp(bufferPool);
             return;
           }
 
           var state = AL.GetSourceState(source);
-          if (state == ALSourceState.Stopped)
+          if (state == ALSourceState.Stopped || (state == ALSourceState.Initial && initialized == true))
           {
-            while (AL.SourceUnqueueBuffer(source) > 0) { }
-            AL.SourceRewind(source);
+            FinishUp(bufferPool);
             return;
           }
 
-          // queue new buffers
-          if (state == ALSourceState.Initial)
-          {
-            QueueBuffer(audioFile, soundData, streamingBufferQueueSize, bufferPool);
-            QueueBuffer(audioFile, soundData, streamingBufferQueueSize, bufferPool);
-          }
+          // queue new buffer if required
           QueueBuffer(audioFile, soundData, streamingBufferQueueSize, bufferPool);
-
-          if (state != ALSourceState.Playing && state != ALSourceState.Paused)
-          {
-            AL.SourcePlay(source);
-          }
-
-          // clear played buffers
+          
+          // clear played buffers and requeue them
           var processedBuffers = UnqueueBuffers(source, bufferPool);
           var processedSize = processedBuffers
           .Select(bufferId => {
             AL.GetBuffer(bufferId, ALGetBufferi.Size, out var size);
             return size;
           }).Sum();
-          currentTime += audioFile.GetMilliseconds(processedSize) / 1000;
+          currentTime += audioFile.GetMilliseconds(processedSize) / 1000.0;
+          foreach (var _ in processedBuffers)
+          {
+            QueueBuffer(audioFile, soundData, streamingBufferQueueSize, bufferPool);
+          }
+
+          if (state != ALSourceState.Playing && state != ALSourceState.Paused)
+          {
+            AL.SourcePlay(source);
+            initialized = true;
+          }
 
           var offset = 0.0f;
           if (supportsOffset)
@@ -176,9 +173,28 @@ namespace OpenALMusicPlayer.AudioEngine
 
           timeUpdateCallback(currentTime + offset, totalTime);
 
+          if (currentTime >= totalTime)
+          {
+            FinishUp(bufferPool);
+            return;
+          }
+
           await Task.Delay(interval);
         }
       });
+    }
+
+    private void FinishUp(BufferPool bufferPool)
+    {
+      AL.SourceStop(source);
+      CheckALError("stopping source when finishing up");
+      var _ = UnqueueBuffers(source, bufferPool);
+      while (AL.SourceUnqueueBuffer(source) > 0)
+      {
+        Trace.WriteLine("Extrenous buffer found");
+      }
+      AL.SourceRewind(source);
+      CheckALError("rewinding source");
     }
 
     private SimpleCancellationToken NewCancellationToken()
@@ -197,7 +213,7 @@ namespace OpenALMusicPlayer.AudioEngine
       if (audioFile.Position < audioFile.Length)
       {
         AL.GetSource(source, ALGetSourcei.BuffersQueued, out int buffersQueued);
-        CheckALError("checking buffers queued buffer");
+        CheckALError("checking buffers queued");
 
         if (buffersQueued < streamingBufferQueueSize && audioFile.Position < audioFile.Length)
         {
@@ -252,6 +268,7 @@ namespace OpenALMusicPlayer.AudioEngine
       if (buffersProcessed > 0)
       {
         var dequeuedBuffers = AL.SourceUnqueueBuffers(source, buffersProcessed);
+        CheckALError("dequeuing buffers");
         foreach (var dequeuedBuffer in dequeuedBuffers)
         {
           bufferPool.Return(dequeuedBuffer);
