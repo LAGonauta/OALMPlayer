@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -25,8 +26,7 @@ namespace OpenALMusicPlayer.AudioEngine
     private bool disposedValue = false;
 
     private readonly SemaphoreSlim playSemaphore = new SemaphoreSlim(1, 1);
-    private readonly object lockObj = new();
-    private SimpleCancellationToken simpleCancellationToken = new();
+    private ConcurrentQueue<CancellationTokenSource> concurrentBag = new();
 
     public bool IsValid => !disposedValue;
 
@@ -68,9 +68,12 @@ namespace OpenALMusicPlayer.AudioEngine
 
     public void Stop()
     {
-      lock (lockObj)
+      while (concurrentBag.TryDequeue(out var item))
       {
-        simpleCancellationToken.Cancel();
+        if (!item.IsCancellationRequested)
+        {
+          item.Cancel();
+        }
       }
     }
 
@@ -99,9 +102,10 @@ namespace OpenALMusicPlayer.AudioEngine
 
     public async Task Play(string filePath, Action<double, double> timeUpdateCallback)
     {
+      using var tokenSource = NewCancellationToken();
       await Task.Run(async () =>
       {
-        var localToken = NewCancellationToken();
+        var localToken = tokenSource.Token;
         using var playReleaseToken = await playSemaphore.LockAsync();
         using var audioFile = GetAudioFile(filePath);
         var totalTime = audioFile.GetLength().TotalMilliseconds / 1000.0;
@@ -123,7 +127,7 @@ namespace OpenALMusicPlayer.AudioEngine
           streamingBufferQueueSize = 3;
         }
 
-        var interval = TimeSpan.FromMilliseconds(100);
+        var interval = TimeSpan.FromMilliseconds(200);
         var currentTime = 0.0;
         var soundData = new byte[streamingBufferSize];
         var initialized = false;
@@ -186,9 +190,22 @@ namespace OpenALMusicPlayer.AudioEngine
             return;
           }
 
-          await Task.Delay(interval);
+          await SafeDelay(interval, localToken);
         }
       });
+      tokenSource.Cancel();
+    }
+
+    private async Task SafeDelay(TimeSpan interval, CancellationToken token)
+    {
+      try
+      {
+        await Task.Delay(interval, token);
+      }
+      catch (TaskCanceledException e)
+      {
+        Trace.WriteLine($"Task cancelled: {e.Message}");
+      }
     }
 
     private void FinishUp(BufferPool bufferPool)
@@ -204,15 +221,11 @@ namespace OpenALMusicPlayer.AudioEngine
       CheckALError("rewinding source");
     }
 
-    private SimpleCancellationToken NewCancellationToken()
+    private CancellationTokenSource NewCancellationToken()
     {
-      lock (lockObj)
-      {
-        simpleCancellationToken.Cancel();
-        var newToken = new SimpleCancellationToken();
-        simpleCancellationToken = newToken;
-        return newToken;
-      }
+      var cancellationTokenSource = new CancellationTokenSource(); ;
+      concurrentBag.Enqueue(cancellationTokenSource);
+      return cancellationTokenSource;
     }
 
     private void QueueBuffer(IWaveSource audioFile, byte[] soundData, int streamingBufferQueueSize, BufferPool bufferPool)
