@@ -456,41 +456,40 @@ namespace OpenALMusicPlayer
     }
     #endregion
 
-    public static int[] PitchCorrection(float rate)
+    public static (int semitones, int cents) PitchCorrection(float rate)
     {
-      float pitch_correction_cents_total = 1200 * (float)(Math.Log(1 / rate) / Math.Log(2));
-      int pitch_correction_semitones;
-      float pitch_correction_cents;
+      float pitchCorrectionCentsTotal = 1200 * (float)(Math.Log(1 / rate) / Math.Log(2));
+      int pitchCorrectionSemitones;
+      float pitchCorretionCents;
 
-      if (pitch_correction_cents_total > 1250)
+      if (pitchCorrectionCentsTotal > 1250)
       {
-        pitch_correction_semitones = 12;
-        pitch_correction_cents = 50;
+        pitchCorrectionSemitones = 12;
+        pitchCorretionCents = 50;
       }
-      else if (pitch_correction_cents_total < -1250)
+      else if (pitchCorrectionCentsTotal < -1250)
       {
-        pitch_correction_semitones = -12;
-        pitch_correction_cents = -50;
+        pitchCorrectionSemitones = -12;
+        pitchCorretionCents = -50;
       }
       else
       {
-        pitch_correction_semitones = (int)(pitch_correction_cents_total / 100); // Truncate
-        pitch_correction_cents = pitch_correction_cents_total - pitch_correction_semitones * 100;
+        pitchCorrectionSemitones = (int)(pitchCorrectionCentsTotal / 100); // Truncate
+        pitchCorretionCents = pitchCorrectionCentsTotal - pitchCorrectionSemitones * 100;
 
-        if (pitch_correction_cents > 50)
+        if (pitchCorretionCents > 50)
         {
-          pitch_correction_semitones = pitch_correction_semitones + 1;
-          pitch_correction_cents = pitch_correction_cents - 100;
+          pitchCorrectionSemitones = pitchCorrectionSemitones + 1;
+          pitchCorretionCents = pitchCorretionCents - 100;
         }
-        else if (pitch_correction_cents < -50)
+        else if (pitchCorretionCents < -50)
         {
-          pitch_correction_semitones = pitch_correction_semitones - 1;
-          pitch_correction_cents = pitch_correction_cents + 100;
+          pitchCorrectionSemitones = pitchCorrectionSemitones - 1;
+          pitchCorretionCents = pitchCorretionCents + 100;
         }
       }
 
-      int[] pitch_out = new int[] { pitch_correction_semitones, (int)Math.Round(pitch_correction_cents) };
-      return pitch_out;
+      return (pitchCorrectionSemitones, (int)Math.Round(pitchCorretionCents));
     }
 
     private void pitchShiftCheckbox_Checked(object sender, RoutedEventArgs e)
