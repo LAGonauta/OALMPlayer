@@ -307,51 +307,6 @@ namespace OpenALMusicPlayer
       // Updating the values only when they change. Is this faster or slower than just updating them?
       if (musicPlayer != null)
       {
-        TimeSpan current_time = TimeSpan.FromSeconds(musicPlayer.TrackCurrentTime);
-        TimeSpan total_time = TimeSpan.FromSeconds(musicPlayer.TrackTotalTime);
-
-        if (musicPlayer.Status != PlayerState.Stopped)
-        {
-          if (musicPlayer.TrackTotalTime > 0)
-          {
-            if (audio_position_slider.Value != musicPlayer.TrackCurrentTime / musicPlayer.TrackTotalTime)
-            {
-              audio_position_slider.Value = musicPlayer.TrackCurrentTime / musicPlayer.TrackTotalTime;
-            }
-          }
-
-          var pos_text = $"{(int)current_time.TotalMinutes}:{current_time.Seconds:00} / {(int)total_time.TotalMinutes}:{total_time.Seconds:00}";
-          if (position_text_display.Text != pos_text)
-          {
-            position_text_display.Text = pos_text;
-          }
-
-          if (playlistItems.SelectedIndex != musicPlayer.CurrentMusic - 1)
-          {
-            if (!playlistItems.IsMouseOver)
-            {
-              playlistItems.SelectedIndex = musicPlayer.CurrentMusic - 1;
-            } 
-          }
-        }
-        else
-        {
-          if (audio_position_slider.Value != 0)
-          {
-            audio_position_slider.Value = 0;
-          }
-          
-          if (current_music_text_display.Text != "-")
-          {
-            current_music_text_display.Text = "-";
-          }
-          
-          if (position_text_display.Text != "0:00 / 0:00")
-          {
-            position_text_display.Text = "0:00 / 0:00";
-          }
-        }
-
         if (musicPlayer.XRamTotal > 0)
         {
           if (xram_text_display.Text != (musicPlayer.XRamFree / (1024.0 * 1024)).ToString("0.00") + "MB")
@@ -400,9 +355,9 @@ namespace OpenALMusicPlayer
     private void DeviceChoice_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
       musicPlayer?.Dispose();
-      musicPlayer = new MusicPlayer((string)DeviceChoice.SelectedValue, filePaths, () =>
+      Action updateTrackNumber = () =>
       {
-        Dispatcher.Invoke(() =>
+        Dispatcher.InvokeAsync(() =>
         {
           var currentMusic = musicPlayer.CurrentMusic.ToString();
           var currentText = current_music_text_display.Text;
@@ -411,7 +366,58 @@ namespace OpenALMusicPlayer
             current_music_text_display.Text = currentMusic;
           }
         });
-      });
+      };
+
+      Action<double, double> updateTrackPosition = (currentTime, totalTime) =>
+      {
+        Dispatcher.InvokeAsync(() =>
+        {
+          var current_time = TimeSpan.FromSeconds(currentTime);
+          var total_time = TimeSpan.FromSeconds(totalTime);
+
+          if (musicPlayer.Status != PlayerState.Stopped)
+          {
+            if (musicPlayer.TrackTotalTime > 0)
+            {
+              var val = musicPlayer.TrackCurrentTime / musicPlayer.TrackTotalTime;
+              if (audio_position_slider.Value != val)
+              {
+                audio_position_slider.Value = val;
+              }
+            }
+
+            var pos_text = $"{(int)current_time.TotalMinutes}:{current_time.Seconds:00} / {(int)total_time.TotalMinutes}:{total_time.Seconds:00}";
+            if (position_text_display.Text != pos_text)
+            {
+              position_text_display.Text = pos_text;
+            }
+
+            if (playlistItems.SelectedIndex != musicPlayer.CurrentMusic - 1 && !playlistItems.IsMouseOver)
+            {
+              playlistItems.SelectedIndex = musicPlayer.CurrentMusic - 1;
+            }
+          }
+          else
+          {
+            if (audio_position_slider.Value != 0)
+            {
+              audio_position_slider.Value = 0;
+            }
+
+            if (current_music_text_display.Text != "-")
+            {
+              current_music_text_display.Text = "-";
+            }
+
+            if (position_text_display.Text != "0:00 / 0:00")
+            {
+              position_text_display.Text = "0:00 / 0:00";
+            }
+          }
+        });
+      };
+
+      musicPlayer = new MusicPlayer((string)DeviceChoice.SelectedValue, filePaths, updateTrackNumber, updateTrackPosition);
 
       // Load settings after changing player
       if (radioRepeatAll.IsChecked == true)
@@ -444,8 +450,7 @@ namespace OpenALMusicPlayer
       Properties.Settings.Default.LastPlaylist.AddRange(filePaths.ToArray());
       Properties.Settings.Default.Save();
 
-      if (musicPlayer != null)
-        musicPlayer.Dispose();
+      musicPlayer?.Dispose();
 
       ni.Visible = false;
     }

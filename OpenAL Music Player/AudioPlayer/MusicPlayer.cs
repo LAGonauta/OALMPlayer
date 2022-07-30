@@ -8,7 +8,8 @@ namespace OpenALMusicPlayer.AudioPlayer
   {
 
     #region Fields
-    private readonly Action trackUpdateCallback;
+    private readonly Action trackNumberUpdateCallback;
+    private readonly Action<double, double> trackPositionUpdateCallback;
 
     private AudioEngine.AudioPlayer audioPlayer;
     private PlayerState currentState = PlayerState.Stopped;
@@ -37,7 +38,6 @@ namespace OpenALMusicPlayer.AudioPlayer
         currentMusic = value - 1;
         currentState = PlayerState.ChangingTrack;
         audioPlayer.Stop();
-        trackUpdateCallback();
       }
     }
 
@@ -76,11 +76,12 @@ namespace OpenALMusicPlayer.AudioPlayer
     #endregion
 
     #region Constructor
-    public MusicPlayer(string device, List<string> filePaths, Action trackUpdateCallback)
+    public MusicPlayer(string device, List<string> filePaths, Action trackNumberUpdateCallback, Action<double, double> trackPositionUpdateCallback)
     {
       audioPlayer = new AudioEngine.AudioPlayer(device);
       MusicList = filePaths;
-      this.trackUpdateCallback = trackUpdateCallback;
+      this.trackNumberUpdateCallback = trackNumberUpdateCallback;
+      this.trackPositionUpdateCallback = trackPositionUpdateCallback;
     }
     #endregion
 
@@ -104,12 +105,14 @@ namespace OpenALMusicPlayer.AudioPlayer
         {
           return;
         }
+        trackNumberUpdateCallback();
         await player.Play(
           MusicList[currentMusic],
           (current, total) =>
           {
             trackTotalTime = total;
             trackCurrentTime = current;
+            trackPositionUpdateCallback(current, total);
           });
         if (currentState == PlayerState.Playing)
         {
@@ -132,14 +135,14 @@ namespace OpenALMusicPlayer.AudioPlayer
     {
       if (force_next)
       {
-        currentMusic = (currentMusic + 1) % MusicList.Count;
+        CurrentMusic = (CurrentMusic % MusicList.Count) + 1;
         currentState = PlayerState.ChangingTrack;
       }
       else
       {
         if (RepeatSetting == RepeatType.All)
         {
-          currentMusic = (currentMusic + 1) % MusicList.Count;
+          CurrentMusic = (CurrentMusic % MusicList.Count) + 1;
           currentState = PlayerState.ChangingTrack;
         }
         else if (RepeatSetting == RepeatType.Song)
@@ -148,31 +151,30 @@ namespace OpenALMusicPlayer.AudioPlayer
         }
         else if (RepeatSetting == RepeatType.No)
         {
-          if (currentMusic + 1 == MusicList.Count)
+          if (CurrentMusic == MusicList.Count)
           {
             currentState = PlayerState.Stopped;
           }
           else
           {
-            currentMusic = (currentMusic + 1) % MusicList.Count;
+            CurrentMusic = (CurrentMusic % MusicList.Count) + 1;
             currentState = PlayerState.ChangingTrack;
           }
         }
       }
-      CurrentMusic = currentMusic + 1;
       var player = audioPlayer;
       player?.Stop();
     }
 
     public void PreviousTrack()
     {
-      if (currentMusic == 0)
+      if (CurrentMusic == 1)
       {
-        currentMusic = MusicList.Count - 1;
+        CurrentMusic = MusicList.Count;
       }
       else
       {
-        currentMusic = currentMusic - 1;
+        CurrentMusic = CurrentMusic - 1;
       }
       currentState = PlayerState.ChangingTrack;
       audioPlayer.Stop();
@@ -199,10 +201,7 @@ namespace OpenALMusicPlayer.AudioPlayer
       {
         if (disposing)
         {
-          if (audioPlayer != null)
-          {
-            audioPlayer.Dispose();
-          }
+          audioPlayer?.Dispose();
         }
 
         disposedValue = true;

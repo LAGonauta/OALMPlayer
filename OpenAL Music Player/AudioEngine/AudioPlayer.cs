@@ -58,13 +58,7 @@ namespace OpenALMusicPlayer.AudioEngine
       });
     }
 
-    public ALSourceState State
-    {
-      get
-      {
-        return AL.GetSourceState(source);
-      }
-    }
+    public ALSourceState State => AL.GetSourceState(source);
 
     public void Stop()
     {
@@ -94,54 +88,28 @@ namespace OpenALMusicPlayer.AudioEngine
         AL.GetSource(source, ALSourceb.Looping, out bool looping);
         return looping;
       }
-      set
-      {
-        AL.Source(source, ALSourceb.Looping, value);
-      }
+      set => AL.Source(source, ALSourceb.Looping, value);
     }
 
     public async Task Play(string filePath, Action<double, double> timeUpdateCallback)
     {
       using var tokenSource = NewCancellationToken();
       var localToken = tokenSource.Token;
-
-      var currentTime = 0.0;
-      var totalTime = 0.0;
-      var offsetTask = Task.Run(async () =>
-      {
-        if (supportsOffset)
-        {
-          var interval = TimeSpan.FromMilliseconds(50);
-          while (true)
-          {
-            if (localToken.IsCancellationRequested)
-            {
-              return;
-            }
-
-            AL.GetSource(source, ALSourcef.SecOffset, out var offset);
-            timeUpdateCallback(currentTime + offset, totalTime);
-
-            await SafeDelay(interval, localToken);
-          }
-        }
-      });
-
-      var playTask = Task.Run(async () =>
+      await Task.Run(async () =>
       {
         using var playReleaseToken = await playSemaphore.LockAsync();
         using var audioFile = GetAudioFile(filePath);
-        totalTime = audioFile.GetLength().TotalMilliseconds / 1000.0;
-
-        const int streamingBufferTime = 1000; // in milliseconds
+        var totalTime = audioFile.GetLength().TotalMilliseconds / 1000.0;
+        var streamingBufferTime = TimeSpan.FromMilliseconds(1000);
         var streamingBufferSize = (int)audioFile.GetRawElements(streamingBufferTime);
 
         var streamingBufferQueueSize = 5; // get from gui
         if (IsXFi)
         {
-          if (streamingBufferQueueSize > GetFreeXRam / streamingBufferSize)
+          var capacity = GetFreeXRam / streamingBufferSize;
+          if (streamingBufferQueueSize > capacity)
           {
-            streamingBufferQueueSize = GetFreeXRam / streamingBufferSize;
+            streamingBufferQueueSize = capacity;
           }
         }
 
@@ -150,7 +118,8 @@ namespace OpenALMusicPlayer.AudioEngine
           streamingBufferQueueSize = 3;
         }
 
-        var interval = TimeSpan.FromMilliseconds(200);
+        var currentTime = 0.0;
+        var interval = streamingBufferTime / 2;
         var soundData = new byte[streamingBufferSize];
         var initialized = false;
         using var bufferPool = new BufferPool(hasXram);
@@ -204,11 +173,19 @@ namespace OpenALMusicPlayer.AudioEngine
             return;
           }
 
+          var offset = 0.0f;
+          if (supportsOffset)
+          {
+            AL.GetSource(source, ALSourcef.SecOffset, out offset);
+            CheckALError("checking offset");
+          }
+          timeUpdateCallback(currentTime + offset, totalTime);
+
           await SafeDelay(interval, localToken);
         }
       });
 
-      await Task.WhenAll(offsetTask, playTask);
+      timeUpdateCallback(0, 0);
       tokenSource.Cancel();
     }
 
