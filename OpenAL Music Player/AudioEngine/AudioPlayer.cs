@@ -103,12 +103,35 @@ namespace OpenALMusicPlayer.AudioEngine
     public async Task Play(string filePath, Action<double, double> timeUpdateCallback)
     {
       using var tokenSource = NewCancellationToken();
-      await Task.Run(async () =>
+      var localToken = tokenSource.Token;
+
+      var currentTime = 0.0;
+      var totalTime = 0.0;
+      var offsetTask = Task.Run(async () =>
       {
-        var localToken = tokenSource.Token;
+        if (supportsOffset)
+        {
+          var interval = TimeSpan.FromMilliseconds(50);
+          while (true)
+          {
+            if (localToken.IsCancellationRequested)
+            {
+              return;
+            }
+
+            AL.GetSource(source, ALSourcef.SecOffset, out var offset);
+            timeUpdateCallback(currentTime + offset, totalTime);
+
+            await SafeDelay(interval, localToken);
+          }
+        }
+      });
+
+      var playTask = Task.Run(async () =>
+      {
         using var playReleaseToken = await playSemaphore.LockAsync();
         using var audioFile = GetAudioFile(filePath);
-        var totalTime = audioFile.GetLength().TotalMilliseconds / 1000.0;
+        totalTime = audioFile.GetLength().TotalMilliseconds / 1000.0;
 
         const int streamingBufferTime = 1000; // in milliseconds
         var streamingBufferSize = (int)audioFile.GetRawElements(streamingBufferTime);
@@ -128,7 +151,6 @@ namespace OpenALMusicPlayer.AudioEngine
         }
 
         var interval = TimeSpan.FromMilliseconds(200);
-        var currentTime = 0.0;
         var soundData = new byte[streamingBufferSize];
         var initialized = false;
         using var bufferPool = new BufferPool(hasXram);
@@ -176,14 +198,6 @@ namespace OpenALMusicPlayer.AudioEngine
             initialized = true;
           }
 
-          var offset = 0.0f;
-          if (supportsOffset)
-          {
-            AL.GetSource(source, ALSourcef.SecOffset, out offset);
-          }
-
-          timeUpdateCallback(currentTime + offset, totalTime);
-
           if (currentTime >= totalTime)
           {
             FinishUp(bufferPool);
@@ -193,6 +207,8 @@ namespace OpenALMusicPlayer.AudioEngine
           await SafeDelay(interval, localToken);
         }
       });
+
+      await Task.WhenAll(offsetTask, playTask);
       tokenSource.Cancel();
     }
 
