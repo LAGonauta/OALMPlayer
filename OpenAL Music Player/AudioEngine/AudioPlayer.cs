@@ -361,10 +361,7 @@ namespace OpenALMusicPlayer.AudioEngine
       }
       catch
       {
-        if (audioFile != null)
-        {
-          audioFile.Dispose();
-        }
+        audioFile?.Dispose();
         throw;
       }
     }
