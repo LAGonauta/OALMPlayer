@@ -143,6 +143,12 @@ namespace OpenALMusicPlayer.AudioEngine
             return;
           }
 
+          if (state == ALSourceState.Paused)
+          {
+            await SafeDelay(interval, localToken);
+            continue;
+          }
+
           // queue new buffer if required
           QueueBuffer(audioFile, soundData, streamingBufferQueueSize, bufferPool);
           
