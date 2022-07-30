@@ -211,7 +211,7 @@
                             </Separator.Background>
                         </Separator>
                         <TextBlock Text="Speed (%)" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        <Slider x:Name="speed_slider" Orientation="Vertical" HorizontalAlignment="Center" VerticalAlignment="Center" Height="99" Maximum="2" Value="1" ValueChanged="Slider_SpeedChanged" Minimum="0.0001" SmallChange="0.01" LargeChange="0.10" TickFrequency="0.50" TickPlacement="TopLeft"/>
+                        <Slider x:Name="speed_slider" Orientation="Vertical" HorizontalAlignment="Center" VerticalAlignment="Center" Height="99" Maximum="2" Value="1" ValueChanged="Slider_PitchChanged" Minimum="0.0001" SmallChange="0.01" LargeChange="0.10" TickFrequency="0.50" TickPlacement="TopLeft"/>
                         <TextBlock x:Name="speed_text_display" Text="100%" HorizontalAlignment="Center"/>
                     </StackPanel>
                 </Grid>

@@ -37,11 +37,8 @@ namespace OpenALMusicPlayer
     // Generate playlist
     public ObservableCollection<PlaylistItemsList> items = new ObservableCollection<PlaylistItemsList>();
 
-    // Multithreaded delegated callback, so our gui is not stuck while playing sound
-    public delegate void UpdateDeviceListCallBack();
-
     // OpenAL controls
-    private MusicPlayer player;
+    private MusicPlayer musicPlayer;
 
     // CPU usage
     PerformanceCounter theCPUCounter = new PerformanceCounter("Process", "% Processor Time", Process.GetCurrentProcess().ProcessName);
@@ -165,9 +162,9 @@ namespace OpenALMusicPlayer
       playlistItems
           .ForEach(item => items.Add(item));
 
-      if (player != null)
+      if (musicPlayer != null)
       {
-        player.MusicList = filePaths; 
+        musicPlayer.MusicList = filePaths; 
       }
     }
 
@@ -197,23 +194,23 @@ namespace OpenALMusicPlayer
       {
         if (filePaths.Count > 0)
         {
-          playlistItems.SelectedIndex = player.CurrentMusic - 1;
-          if (player.Status == PlayerState.Paused)
+          playlistItems.SelectedIndex = musicPlayer.CurrentMusic - 1;
+          if (musicPlayer.Status == PlayerState.Paused)
           {
-            player.Unpause();
+            musicPlayer.Unpause();
             SoundPlayPause.Content = "Pause";
           }
           else
           {
-            if (player.Status == PlayerState.Playing)
+            if (musicPlayer.Status == PlayerState.Playing)
             {
               SoundPlayPause.Content = "Play";
-              player.Pause();
+              musicPlayer.Pause();
             }
             else
             {
               SoundPlayPause.Content = "Pause";
-              await player.Play();
+              await musicPlayer.Play();
             }
           }
         }
@@ -227,8 +224,8 @@ namespace OpenALMusicPlayer
         if (filePaths.Count > 0)
         {
           SoundPlayPause.Content = "Pause";
-          player.NextTrack();
-          playlistItems.SelectedIndex = player.CurrentMusic - 1;
+          musicPlayer.NextTrack();
+          playlistItems.SelectedIndex = musicPlayer.CurrentMusic - 1;
         }
       }
     }
@@ -236,7 +233,7 @@ namespace OpenALMusicPlayer
     private void Stop_Click(object sender, RoutedEventArgs e)
     {
       SoundPlayPause.Content = "Play";
-      player.Stop();
+      musicPlayer.Stop();
     }
 
     private void Back_Click(object sender, RoutedEventArgs e)
@@ -246,8 +243,8 @@ namespace OpenALMusicPlayer
         if (filePaths.Count > 0)
         {
           SoundPlayPause.Content = "Pause";
-          player.PreviousTrack();
-          playlistItems.SelectedIndex = player.CurrentMusic - 1;
+          musicPlayer.PreviousTrack();
+          playlistItems.SelectedIndex = musicPlayer.CurrentMusic - 1;
         }
       }
     }
@@ -264,8 +261,8 @@ namespace OpenALMusicPlayer
       {
         SoundPlayPause.Content = "Pause";
         // is SelectedIndex zero indexed? Yes.
-        var status = player.Status;
-        player.CurrentMusic = playlistItems.SelectedIndex + 1;
+        var status = musicPlayer.Status;
+        musicPlayer.CurrentMusic = playlistItems.SelectedIndex + 1;
         if (status == PlayerState.Stopped)
         {
           Play_Click(sender, e);
@@ -275,9 +272,9 @@ namespace OpenALMusicPlayer
 
     private void Slider_VolumeChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
-      if (player != null)
+      if (musicPlayer != null)
       {
-        player.Volume = (float)e.NewValue;
+        musicPlayer.Volume = (float)e.NewValue;
       }
 
       if (volume_text_display != null)
@@ -286,11 +283,11 @@ namespace OpenALMusicPlayer
       }      
     }
 
-    public void Slider_SpeedChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    public void Slider_PitchChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
-      if (player != null)
+      if (musicPlayer != null)
       {
-        player.Pitch = (float)e.NewValue;
+        musicPlayer.Pitch = (float)e.NewValue;
       }
 
       if (speed_text_display != null)
@@ -299,33 +296,28 @@ namespace OpenALMusicPlayer
       }
     }
 
-    private void UpdateCPUUsage(object source, EventArgs e)
+    private void UpdateCPUUsage(object _, EventArgs __)
     {
       total_cpu_usage = theCPUCounter.NextValue();
       CPUUsagePercent.Text = (total_cpu_usage / CPU_logic_processors).ToString("0.0") + "%";
     }
 
-    private void UpdateInfoText(object source, EventArgs e)
+    private void UpdateInfoText(object _, EventArgs __)
     {
       // Updating the values only when they change. Is this faster or slower than just updating them?
-      if (player != null)
+      if (musicPlayer != null)
       {
-        TimeSpan current_time = TimeSpan.FromSeconds(player.TrackCurrentTime);
-        TimeSpan total_time = TimeSpan.FromSeconds(player.TrackTotalTime);
+        TimeSpan current_time = TimeSpan.FromSeconds(musicPlayer.TrackCurrentTime);
+        TimeSpan total_time = TimeSpan.FromSeconds(musicPlayer.TrackTotalTime);
 
-        if (player.Status != PlayerState.Stopped)
+        if (musicPlayer.Status != PlayerState.Stopped)
         {
-          if (player.TrackTotalTime > 0)
+          if (musicPlayer.TrackTotalTime > 0)
           {
-            if (audio_position_slider.Value != player.TrackCurrentTime / player.TrackTotalTime)
+            if (audio_position_slider.Value != musicPlayer.TrackCurrentTime / musicPlayer.TrackTotalTime)
             {
-              audio_position_slider.Value = player.TrackCurrentTime / player.TrackTotalTime;
+              audio_position_slider.Value = musicPlayer.TrackCurrentTime / musicPlayer.TrackTotalTime;
             }
-          }
-
-          if (current_music_text_display.Text != player.CurrentMusic.ToString())
-          {
-            current_music_text_display.Text = player.CurrentMusic.ToString();
           }
 
           var pos_text = $"{(int)current_time.TotalMinutes}:{current_time.Seconds:00} / {(int)total_time.TotalMinutes}:{total_time.Seconds:00}";
@@ -334,11 +326,11 @@ namespace OpenALMusicPlayer
             position_text_display.Text = pos_text;
           }
 
-          if (playlistItems.SelectedIndex != player.CurrentMusic - 1)
+          if (playlistItems.SelectedIndex != musicPlayer.CurrentMusic - 1)
           {
             if (!playlistItems.IsMouseOver)
             {
-              playlistItems.SelectedIndex = player.CurrentMusic - 1;
+              playlistItems.SelectedIndex = musicPlayer.CurrentMusic - 1;
             } 
           }
         }
@@ -360,11 +352,11 @@ namespace OpenALMusicPlayer
           }
         }
 
-        if (player.XRamTotal > 0)
+        if (musicPlayer.XRamTotal > 0)
         {
-          if (xram_text_display.Text != (player.XRamFree / (1024.0 * 1024)).ToString("0.00") + "MB")
+          if (xram_text_display.Text != (musicPlayer.XRamFree / (1024.0 * 1024)).ToString("0.00") + "MB")
           {
-            xram_text_display.Text = (player.XRamFree / (1024.0 * 1024)).ToString("0.00") + "MB"; 
+            xram_text_display.Text = (musicPlayer.XRamFree / (1024.0 * 1024)).ToString("0.00") + "MB"; 
           }
         }
         else
@@ -407,36 +399,44 @@ namespace OpenALMusicPlayer
 
     private void DeviceChoice_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-      if (player != null)
+      musicPlayer?.Dispose();
+      musicPlayer = new MusicPlayer((string)DeviceChoice.SelectedValue, filePaths, () =>
       {
-        player.Dispose();
-      }
-      player = new MusicPlayer(filePaths, (string)DeviceChoice.SelectedValue);
+        Dispatcher.Invoke(() =>
+        {
+          var currentMusic = musicPlayer.CurrentMusic.ToString();
+          var currentText = current_music_text_display.Text;
+          if (currentText != currentMusic)
+          {
+            current_music_text_display.Text = currentMusic;
+          }
+        });
+      });
 
       // Load settings after changing player
       if (radioRepeatAll.IsChecked == true)
       {
-        player.RepeatSetting = RepeatType.All;
+        musicPlayer.RepeatSetting = RepeatType.All;
       }
       else if (radioRepeatSong.IsChecked == true)
       {
-        player.RepeatSetting = RepeatType.Song;
+        musicPlayer.RepeatSetting = RepeatType.Song;
       }
       else if (radioRepeatNone.IsChecked == true)
       {
-        player.RepeatSetting = RepeatType.No;
+        musicPlayer.RepeatSetting = RepeatType.No;
       }
 
-      player.Volume = (float)volume_slider.Value;
-      player.Pitch = (float)speed_slider.Value;
+      musicPlayer.Volume = (float)volume_slider.Value;
+      musicPlayer.Pitch = (float)speed_slider.Value;
       //player.UpdateRate = (uint)thread_rate_slider.Value; TODO: remove this slider
-      player.MusicList = filePaths;
+      musicPlayer.MusicList = filePaths;
     }
 
     private void Window_Closing(object sender, EventArgs e)
     {
       Properties.Settings.Default.Device = (string)DeviceChoice.SelectedValue;
-      Properties.Settings.Default.Repeat = (byte)player.RepeatSetting;
+      Properties.Settings.Default.Repeat = (byte)musicPlayer.RepeatSetting;
       Properties.Settings.Default.Volume = volume_slider.Value;
       Properties.Settings.Default.Speed = speed_slider.Value;
       Properties.Settings.Default.UpdateRate = (uint)thread_rate_slider.Value;
@@ -444,8 +444,8 @@ namespace OpenALMusicPlayer
       Properties.Settings.Default.LastPlaylist.AddRange(filePaths.ToArray());
       Properties.Settings.Default.Save();
 
-      if (player != null)
-        player.Dispose();
+      if (musicPlayer != null)
+        musicPlayer.Dispose();
 
       ni.Visible = false;
     }
@@ -495,7 +495,7 @@ namespace OpenALMusicPlayer
 
     private void ThreadTimeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
-      if (player != null)
+      if (musicPlayer != null)
         //player.UpdateRate = (uint)e.NewValue; TODO: remove this slider
 
       if (InfoText != null)
@@ -504,19 +504,19 @@ namespace OpenALMusicPlayer
 
     private void repeatRadioButtons_checked(object sender, RoutedEventArgs e)
     {
-      if (player != null)
+      if (musicPlayer != null)
       {
         if (sender == radioRepeatAll)
         {
-          player.RepeatSetting = RepeatType.All;
+          musicPlayer.RepeatSetting = RepeatType.All;
         }
         else if (sender == radioRepeatSong)
         {
-          player.RepeatSetting = RepeatType.Song;
+          musicPlayer.RepeatSetting = RepeatType.Song;
         }
         else if (sender == radioRepeatNone)
         {
-          player.RepeatSetting = RepeatType.No;
+          musicPlayer.RepeatSetting = RepeatType.No;
         }
       }
     }
