@@ -16,8 +16,8 @@ namespace OpenALMusicPlayer.AudioPlayer
     private int currentMusic = 0;
     private double trackTotalTime = 0;
     private double trackCurrentTime = 0;
-    private float volumePercentage = 100;
-    private float volume = 1f;
+    private double volumePercentage = 100;
+    private double volume = 1;
     private float pitch = 1f;
     private bool disposedValue;
     #endregion
@@ -44,15 +44,15 @@ namespace OpenALMusicPlayer.AudioPlayer
     /// <summary>
     /// Volume, from 0 to 100.
     /// </summary>
-    public float Volume
+    public double Volume
     {
       get => volumePercentage;
       set
       {
         volumePercentage = value;
-        //volume = 0.0031623f * (float)Math.Exp(volumePercentage / 100 * 5.757f);
-        volume = (float)Math.Pow(volumePercentage / 100, 3);
-        audioPlayer.Gain = volume;
+        //volume = 0.0031623 * Math.Exp(volumePercentage / 100 * 5.757);
+        volume = Math.Pow(volumePercentage / 100, 3);
+        audioPlayer.Gain = (float)volume;
       }
     }
 
@@ -96,7 +96,7 @@ namespace OpenALMusicPlayer.AudioPlayer
       }
       currentState = PlayerState.Playing;
 
-      audioPlayer.Gain = volume;
+      audioPlayer.Gain = (float)volume;
       audioPlayer.Pitch = pitch;
       var player = audioPlayer;
       while (currentState == PlayerState.Playing)

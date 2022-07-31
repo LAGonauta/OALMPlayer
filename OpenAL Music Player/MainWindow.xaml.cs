@@ -15,8 +15,6 @@ using System.Threading.Tasks;
 using OpenALMusicPlayer.AudioPlayer;
 
 // TODO:
-// Make it OO
-// Use state machine
 // Use INotifyPropertyChanged 
 
 namespace OpenALMusicPlayer
@@ -32,21 +30,20 @@ namespace OpenALMusicPlayer
 
     #region Variables
     // Files in the directory
-    static List<string> filePaths = new List<string>();
+    static List<string> filePaths = new();
 
     // Generate playlist
-    public ObservableCollection<PlaylistItemsList> items = new ObservableCollection<PlaylistItemsList>();
+    public readonly ObservableCollection<PlaylistItemsList> items = new();
 
     // OpenAL controls
     private MusicPlayer musicPlayer;
 
     // CPU usage
-    PerformanceCounter theCPUCounter = new PerformanceCounter("Process", "% Processor Time", Process.GetCurrentProcess().ProcessName);
-    int CPU_logic_processors = Environment.ProcessorCount;
-    float total_cpu_usage;
+    private readonly PerformanceCounter theCPUCounter = new PerformanceCounter("Process", "% Processor Time", Process.GetCurrentProcess().ProcessName);
 
     // Info text
-    System.Windows.Forms.Timer InfoText;
+    private readonly Timer infoTextTimer;
+    private readonly Timer cpuTimer;
 
     NotifyIcon ni;
 
@@ -93,19 +90,16 @@ namespace OpenALMusicPlayer
       CodecFactory.Instance.Register("ogg-vorbis", new CodecFactoryEntry(s => new NVorbisSource(s).ToWaveSource(), ".ogg"));
 
       // Starting CPU usage timer
-      total_cpu_usage = theCPUCounter.NextValue();
-      this.UpdateCPUUsage(null, null);
-      var CPUTimer = new Timer();
-      CPUTimer.Interval = 2000;
-      CPUTimer.Tick += new EventHandler(this.UpdateCPUUsage);
-      CPUTimer.Start();
+      cpuTimer = new Timer();
+      cpuTimer.Interval = 2000;
+      cpuTimer.Tick += new EventHandler(this.UpdateCPUUsage);
+      cpuTimer.Start();
 
       // Starting GUI information update timer
-      this.UpdateCPUUsage(null, null);
-      InfoText = new Timer();
-      InfoText.Interval = 150;
-      InfoText.Tick += new EventHandler(this.UpdateInfoText);
-      InfoText.Start();
+      infoTextTimer = new Timer();
+      infoTextTimer.Interval = 1000;
+      infoTextTimer.Tick += new EventHandler(this.UpdateInfoText);
+      infoTextTimer.Start();
     }
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
@@ -114,53 +108,48 @@ namespace OpenALMusicPlayer
       UpdateDeviceList(devices);
       if (Properties.Settings.Default.LastPlaylist != null)
       {
-        filePaths = new List<string>();
-        foreach (var path in Properties.Settings.Default.LastPlaylist)
-        {
-          if (File.Exists(path))
-          {
-            filePaths.Add(path);
-          }
-        }
-        await GeneratePlaylist(filePaths);
+        var newPaths = await Task.Run(
+          Properties.Settings.Default.LastPlaylist
+          .Cast<string>()
+          .Where(File.Exists)
+          .ToList);
+        filePaths = newPaths;
+        await GeneratePlaylist(newPaths);
       }
     }
 
     public async Task GeneratePlaylist(List<string> filePaths)
     {
-      items.Clear();
-      var playlistItems = await Task.Run(() =>
-      {
-        return filePaths
-          .Select((path, index) =>
+      var playlistItems = await Task.Run(
+        filePaths
+        .Select((path, index) =>
+        {
+          try
           {
-            try
+            var file = TagLib.File.Create(path);
+            return new PlaylistItemsList()
             {
-              var file = TagLib.File.Create(path);
-              return new PlaylistItemsList()
-              {
-                Number = (index + 1).ToString(),
-                Title = file.Tag.Title,
-                Performer = file.Tag.FirstPerformer,
-                Album = file.Tag.Album,
-                FileName = Path.GetFileName(path)
-              };
-            }
-            catch (TagLib.UnsupportedFormatException ex)
+              Number = (index + 1).ToString(),
+              Title = file.Tag.Title,
+              Performer = file.Tag.FirstPerformer,
+              Album = file.Tag.Album,
+              FileName = Path.GetFileName(path)
+            };
+          }
+          catch (TagLib.UnsupportedFormatException ex)
+          {
+            Trace.WriteLine($"Format not supported: {ex.Message}");
+            return new PlaylistItemsList()
             {
-              Trace.WriteLine($"Format not supported: {ex.Message}");
-              return new PlaylistItemsList()
-              {
-                Number = (index + 1).ToString(),
-                FileName = Path.GetFileName(path)
-              };
-            }
-          })
-          .ToList();
-      });
+              Number = (index + 1).ToString(),
+              FileName = Path.GetFileName(path)
+            };
+          }
+        })
+        .ToList);
 
-      playlistItems
-          .ForEach(item => items.Add(item));
+      items.Clear();
+      playlistItems.ForEach(item => items.Add(item));
 
       if (musicPlayer != null)
       {
@@ -171,47 +160,41 @@ namespace OpenALMusicPlayer
     #region GUI stuff
     private async void Open_Click(object sender, RoutedEventArgs e)
     {
-      using (var dlgOpen = new FolderBrowserDialog())
+      using var dlgOpen = new FolderBrowserDialog();
+      dlgOpen.Description = "Escolha a pasta para tocar";
+
+      var result = dlgOpen.ShowDialog();
+      if (result == System.Windows.Forms.DialogResult.OK)
       {
-        dlgOpen.Description = "Escolha a pasta para tocar";
-
-        var result = dlgOpen.ShowDialog();
-
-        if (result == System.Windows.Forms.DialogResult.OK)
-        {
-          var allowedExtensions = CodecFactory.Instance.GetSupportedFileExtensions();
-          filePaths = Directory.GetFiles(dlgOpen.SelectedPath)
-            .Where(file => allowedExtensions.Any(file.ToLowerInvariant().EndsWith))
-            .ToList();
-          await GeneratePlaylist(filePaths);
-        }
+        var allowedExtensions = CodecFactory.Instance.GetSupportedFileExtensions();
+        filePaths = Directory.GetFiles(dlgOpen.SelectedPath)
+          .Where(file => allowedExtensions.Any(file.ToLowerInvariant().EndsWith))
+          .ToList();
+        await GeneratePlaylist(filePaths);
       }
     }
 
     private async void Play_Click(object sender, RoutedEventArgs e)
     {
-      if (filePaths != null)
+      if (filePaths != null && filePaths.Count > 0)
       {
-        if (filePaths.Count > 0)
+        playlistItems.SelectedIndex = musicPlayer.CurrentMusic - 1;
+        if (musicPlayer.Status == PlayerState.Paused)
         {
-          playlistItems.SelectedIndex = musicPlayer.CurrentMusic - 1;
-          if (musicPlayer.Status == PlayerState.Paused)
+          musicPlayer.Unpause();
+          SoundPlayPause.Content = "Pause";
+        }
+        else
+        {
+          if (musicPlayer.Status == PlayerState.Playing)
           {
-            musicPlayer.Unpause();
-            SoundPlayPause.Content = "Pause";
+            SoundPlayPause.Content = "Play";
+            musicPlayer.Pause();
           }
           else
           {
-            if (musicPlayer.Status == PlayerState.Playing)
-            {
-              SoundPlayPause.Content = "Play";
-              musicPlayer.Pause();
-            }
-            else
-            {
-              SoundPlayPause.Content = "Pause";
-              await musicPlayer.Play();
-            }
+            SoundPlayPause.Content = "Pause";
+            await musicPlayer.Play();
           }
         }
       }
@@ -219,14 +202,11 @@ namespace OpenALMusicPlayer
 
     private void Next_Click(object sender, RoutedEventArgs e)
     {
-      if (filePaths != null)
+      if (filePaths != null && filePaths.Count > 0)
       {
-        if (filePaths.Count > 0)
-        {
-          SoundPlayPause.Content = "Pause";
-          musicPlayer.NextTrack();
-          playlistItems.SelectedIndex = musicPlayer.CurrentMusic - 1;
-        }
+        SoundPlayPause.Content = "Pause";
+        musicPlayer.NextTrack();
+        playlistItems.SelectedIndex = musicPlayer.CurrentMusic - 1;
       }
     }
 
@@ -238,14 +218,11 @@ namespace OpenALMusicPlayer
 
     private void Back_Click(object sender, RoutedEventArgs e)
     {
-      if (filePaths != null)
+      if (filePaths != null && filePaths.Count > 0)
       {
-        if (filePaths.Count > 0)
-        {
-          SoundPlayPause.Content = "Pause";
-          musicPlayer.PreviousTrack();
-          playlistItems.SelectedIndex = musicPlayer.CurrentMusic - 1;
-        }
+        SoundPlayPause.Content = "Pause";
+        musicPlayer.PreviousTrack();
+        playlistItems.SelectedIndex = musicPlayer.CurrentMusic - 1;
       }
     }
 
@@ -279,7 +256,7 @@ namespace OpenALMusicPlayer
 
       if (volume_text_display != null)
       {
-        volume_text_display.Text = e.NewValue.ToString("0") + "%";
+        volume_text_display.Text = $"{e.NewValue:0}%";
       }      
     }
 
@@ -292,14 +269,13 @@ namespace OpenALMusicPlayer
 
       if (speed_text_display != null)
       {
-        speed_text_display.Text = (e.NewValue * 100).ToString("0") + "%";
+        speed_text_display.Text = $"{e.NewValue * 100:0}%";
       }
     }
 
     private void UpdateCPUUsage(object _, EventArgs __)
     {
-      total_cpu_usage = theCPUCounter.NextValue();
-      CPUUsagePercent.Text = (total_cpu_usage / CPU_logic_processors).ToString("0.0") + "%";
+      CPUUsagePercent.Text = $"{theCPUCounter.NextValue() / Environment.ProcessorCount:0.0}%";
     }
 
     private void UpdateInfoText(object _, EventArgs __)
@@ -309,9 +285,10 @@ namespace OpenALMusicPlayer
       {
         if (musicPlayer.XRamTotal > 0)
         {
-          if (xram_text_display.Text != (musicPlayer.XRamFree / (1024.0 * 1024)).ToString("0.00") + "MB")
+          var val = $"{musicPlayer.XRamFree / (1024.0 * 1024):0.00}MB";
+          if (xram_text_display.Text != val)
           {
-            xram_text_display.Text = (musicPlayer.XRamFree / (1024.0 * 1024)).ToString("0.00") + "MB"; 
+            xram_text_display.Text = val;
           }
         }
         else
@@ -451,6 +428,10 @@ namespace OpenALMusicPlayer
       Properties.Settings.Default.Save();
 
       musicPlayer?.Dispose();
+      cpuTimer.Stop();
+      cpuTimer.Dispose();
+      infoTextTimer.Stop();
+      infoTextTimer.Dispose();
 
       ni.Visible = false;
     }
@@ -499,11 +480,6 @@ namespace OpenALMusicPlayer
 
     private void ThreadTimeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
-      if (musicPlayer != null)
-        //player.UpdateRate = (uint)e.NewValue; TODO: remove this slider
-
-      if (InfoText != null)
-        InfoText.Interval = (int)e.NewValue;
     }
 
     private void repeatRadioButtons_checked(object sender, RoutedEventArgs e)
