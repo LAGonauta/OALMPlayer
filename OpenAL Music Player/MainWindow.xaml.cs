@@ -379,10 +379,10 @@ namespace OpenALMusicPlayer
           {
             if (musicPlayer.TrackTotalTime > 0)
             {
-              var val = musicPlayer.TrackCurrentTime / musicPlayer.TrackTotalTime;
-              if (audio_position_slider.Value != val)
+              var ratio = musicPlayer.TrackCurrentTime / musicPlayer.TrackTotalTime;
+              if (audio_position_slider.Value != ratio)
               {
-                audio_position_slider.Value = val;
+                audio_position_slider.Value = ratio;
               }
             }
 
@@ -446,7 +446,7 @@ namespace OpenALMusicPlayer
       Properties.Settings.Default.Volume = volume_slider.Value;
       Properties.Settings.Default.Speed = speed_slider.Value;
       Properties.Settings.Default.UpdateRate = (uint)thread_rate_slider.Value;
-      Properties.Settings.Default.LastPlaylist = new System.Collections.Specialized.StringCollection();
+      Properties.Settings.Default.LastPlaylist = new();
       Properties.Settings.Default.LastPlaylist.AddRange(filePaths.ToArray());
       Properties.Settings.Default.Save();
 
