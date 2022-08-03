@@ -114,7 +114,7 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <Slider x:Name="audio_position_slider" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center" VerticalAlignment="Center" Grid.Column="0" Maximum="1" TickFrequency="0.1" LargeChange="0.1" SmallChange="0.01"/>
+                            <Slider x:Name="audio_position_slider" GotMouseCapture="Slider_PositionDrag"  LostMouseCapture="Slider_PositionDrag" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center" VerticalAlignment="Center" Grid.Column="0" Maximum="1" TickFrequency="0.1" LargeChange="0.1" SmallChange="0.01"/>
                             <TextBlock x:Name="position_text_display" Text="0:00 / 0:00" HorizontalAlignment="Right" VerticalAlignment="Center" Grid.Column="1"></TextBlock>
                         </Grid>
 

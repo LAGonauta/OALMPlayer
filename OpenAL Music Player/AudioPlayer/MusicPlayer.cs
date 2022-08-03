@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
+using OpenALMusicPlayer.AudioEngine;
 
 namespace OpenALMusicPlayer.AudioPlayer
 {
@@ -8,14 +10,11 @@ namespace OpenALMusicPlayer.AudioPlayer
   {
 
     #region Fields
-    private readonly Action trackNumberUpdateCallback;
-    private readonly Action<double, double> trackPositionUpdateCallback;
+    private readonly Func<CancellationToken, Task> trackNumberUpdateCallback;
+    private readonly Func<double, double, CancellationToken, Task> trackPositionUpdateCallback;
 
     private AudioEngine.AudioPlayer audioPlayer;
-    private PlayerState currentState = PlayerState.Stopped;
     private int currentMusic = 0;
-    private double trackTotalTime = 0;
-    private double trackCurrentTime = 0;
     private double volumePercentage = 100;
     private double volume = 1;
     private float pitch = 1f;
@@ -33,12 +32,7 @@ namespace OpenALMusicPlayer.AudioPlayer
     public int CurrentMusic
     {
       get => currentMusic + 1;
-      set
-      {
-        currentMusic = value - 1;
-        currentState = PlayerState.ChangingTrack;
-        audioPlayer.Stop();
-      }
+      set => currentMusic = value - 1;
     }
 
     /// <summary>
@@ -62,11 +56,11 @@ namespace OpenALMusicPlayer.AudioPlayer
       set => audioPlayer.Pitch = pitch = value;
     }
 
-    public PlayerState Status => currentState;
+    public PlayerState Status { get; private set; } = PlayerState.Stopped;
 
-    public double TrackCurrentTime => trackCurrentTime;
+    public double TrackCurrentTime { get; private set; } = 0;
 
-    public double TrackTotalTime => trackTotalTime;
+    public double TrackTotalTime { get; private set; } = 0;
 
     public bool IsXFi => audioPlayer.IsXFi;
 
@@ -76,7 +70,7 @@ namespace OpenALMusicPlayer.AudioPlayer
     #endregion
 
     #region Constructor
-    public MusicPlayer(string device, List<string> filePaths, Action trackNumberUpdateCallback, Action<double, double> trackPositionUpdateCallback)
+    public MusicPlayer(string device, List<string> filePaths, Func<CancellationToken, Task> trackNumberUpdateCallback, Func<double, double, CancellationToken, Task> trackPositionUpdateCallback)
     {
       audioPlayer = new AudioEngine.AudioPlayer(device);
       MusicList = filePaths;
@@ -86,84 +80,82 @@ namespace OpenALMusicPlayer.AudioPlayer
     #endregion
 
     #region Public methods
-    public async Task Play()
+    public async Task Play(double position)
     {
-      if (currentState == PlayerState.Paused)
+      if (Status == PlayerState.Paused)
       {
         audioPlayer.Unpause();
-        currentState = PlayerState.Playing;
+        Status = PlayerState.Playing;
         return;
       }
-      currentState = PlayerState.Playing;
-
       audioPlayer.Gain = (float)volume;
       audioPlayer.Pitch = pitch;
+
+      Status = PlayerState.Playing;
       var player = audioPlayer;
-      while (currentState == PlayerState.Playing)
+      do
       {
         if (!player.IsValid)
         {
           return;
         }
-        trackNumberUpdateCallback();
-        await player.Play(
+        await trackNumberUpdateCallback(CancellationToken.None).ConfigureAwait(false);
+        var result = await player.Play(
           MusicList[currentMusic],
-          (current, total) =>
+          async (current, total, token) =>
           {
-            trackTotalTime = total;
-            trackCurrentTime = current;
-            trackPositionUpdateCallback(current, total);
-          });
-        if (currentState == PlayerState.Playing)
+            TrackTotalTime = total;
+            TrackCurrentTime = current;
+            await trackPositionUpdateCallback(current, total, token).ConfigureAwait(false);
+          }, position).ConfigureAwait(false);
+
+        if (result == PlaybackResult.Finished)
         {
-          NextTrack(false);
+          NextTrack(true);
+          position = 0;
         }
-        if (currentState == PlayerState.ChangingTrack)
+        else if (result == PlaybackResult.Stopped)
         {
-          currentState = PlayerState.Playing;
+          return;
         }
-      }
+      } while (Status == PlayerState.Playing);
     }
 
     public void Stop()
     {
-      currentState = PlayerState.Stopped;
+      Status = PlayerState.Stopped;
       audioPlayer.Stop();
     }
 
-    public void NextTrack(bool force_next = true)
+    public void NextTrack(bool finished)
     {
-      if (force_next)
-      {
-        CurrentMusic = (CurrentMusic % MusicList.Count) + 1;
-        currentState = PlayerState.ChangingTrack;
-      }
-      else
+      if (finished)
       {
         if (RepeatSetting == RepeatType.All)
         {
           CurrentMusic = (CurrentMusic % MusicList.Count) + 1;
-          currentState = PlayerState.ChangingTrack;
         }
         else if (RepeatSetting == RepeatType.Song)
         {
-          currentState = PlayerState.ChangingTrack;
+          // Do nothing, it will repeat itself
         }
         else if (RepeatSetting == RepeatType.No)
         {
           if (CurrentMusic == MusicList.Count)
           {
-            currentState = PlayerState.Stopped;
+            Status = PlayerState.Stopped;
           }
           else
           {
             CurrentMusic = (CurrentMusic % MusicList.Count) + 1;
-            currentState = PlayerState.ChangingTrack;
           }
         }
       }
-      var player = audioPlayer;
-      player?.Stop();
+      else
+      {
+        CurrentMusic = (CurrentMusic % MusicList.Count) + 1;
+        audioPlayer.Stop();
+      }
     }
 
     public void PreviousTrack()
@@ -176,19 +168,18 @@ namespace OpenALMusicPlayer.AudioPlayer
       {
         CurrentMusic = CurrentMusic - 1;
       }
-      currentState = PlayerState.ChangingTrack;
       audioPlayer.Stop();
     }
 
     public void Pause()
     {
-      currentState = PlayerState.Paused;
+      Status = PlayerState.Paused;
       audioPlayer.Pause();
     }
 
     public void Unpause()
     {
-      currentState = PlayerState.Playing;
+      Status = PlayerState.Playing;
       audioPlayer.Unpause();
     }
     #endregion

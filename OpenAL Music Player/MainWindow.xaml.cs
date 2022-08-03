@@ -4,7 +4,6 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
-using System.Windows.Forms;
 using System.Windows.Controls;
 using System.Linq;
 
@@ -12,7 +11,12 @@ using CSCore;
 using CSCore.Codecs;
 using System.Reflection;
 using System.Threading.Tasks;
+using System.Threading;
 using OpenALMusicPlayer.AudioPlayer;
+using System.Windows.Input;
+using System.Windows.Forms;
+using Timer = System.Windows.Forms.Timer;
+using System.Windows.Threading;
 
 // TODO:
 // Use INotifyPropertyChanged 
@@ -47,6 +51,8 @@ namespace OpenALMusicPlayer
 
     NotifyIcon ni;
 
+    private bool positionMoving = false;
+
     #endregion
     public MainWindow()
     {
@@ -64,6 +70,7 @@ namespace OpenALMusicPlayer
       ni.DoubleClick += (sender, e) =>
       {
         this.Show();
+        this.Activate();
         this.WindowState = WindowState.Normal;
       };
 
@@ -202,19 +209,20 @@ namespace OpenALMusicPlayer
           else
           {
             SoundPlayPause.Content = "Pause";
-            await musicPlayer.Play();
+            await musicPlayer.Play(0);
           }
         }
       }
     }
 
-    private void Next_Click(object sender, RoutedEventArgs e)
+    private async void Next_Click(object sender, RoutedEventArgs e)
     {
       if (filePaths != null && filePaths.Count > 0)
       {
         SoundPlayPause.Content = "Pause";
-        musicPlayer.NextTrack();
+        musicPlayer.NextTrack(false);
         playlistItems.SelectedIndex = musicPlayer.CurrentMusic - 1;
+        await musicPlayer.Play(0);
       }
     }
 
@@ -224,13 +232,14 @@ namespace OpenALMusicPlayer
       musicPlayer.Stop();
     }
 
-    private void Back_Click(object sender, RoutedEventArgs e)
+    private async void Back_Click(object sender, RoutedEventArgs e)
     {
       if (filePaths != null && filePaths.Count > 0)
       {
         SoundPlayPause.Content = "Pause";
         musicPlayer.PreviousTrack();
         playlistItems.SelectedIndex = musicPlayer.CurrentMusic - 1;
+        await musicPlayer.Play(0);
       }
     }
 
@@ -240,18 +249,14 @@ namespace OpenALMusicPlayer
       about_window.ShowDialog();
     }
 
-    private void PlaylistItem_MouseDoubleClick(object sender, RoutedEventArgs e)
+    private async void PlaylistItem_MouseDoubleClick(object sender, RoutedEventArgs e)
     {
       if (playlistItems.SelectedIndex != -1)
       {
         SoundPlayPause.Content = "Pause";
-        // is SelectedIndex zero indexed? Yes.
-        var status = musicPlayer.Status;
+        // SelectedIndex is zero indexed
         musicPlayer.CurrentMusic = playlistItems.SelectedIndex + 1;
-        if (status == PlayerState.Stopped)
-        {
-          Play_Click(sender, e);
-        }
+        await musicPlayer.Play(0);
       }
     }
 
@@ -266,6 +271,30 @@ namespace OpenALMusicPlayer
       {
         volume_text_display.Text = $"{e.NewValue:0}%";
       }      
+    }
+
+    private async void Slider_PositionDrag(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+      if (e.LeftButton == MouseButtonState.Pressed)
+      {
+        positionMoving = true;
+      }
+      else
+      {
+        if (sender is Slider slider)
+        {
+          var position = slider.Value;
+          positionMoving = false;
+          if (musicPlayer.Status == PlayerState.Playing)
+          {
+            await musicPlayer.Play(position);
+          }
+        }
+        else
+        {
+          positionMoving = false;
+        }
+      }
     }
 
     public void Slider_PitchChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -340,9 +369,34 @@ namespace OpenALMusicPlayer
     private void DeviceChoice_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
       musicPlayer?.Dispose();
-      Action updateTrackNumber = () =>
+
+      musicPlayer = new MusicPlayer((string)DeviceChoice.SelectedValue, filePaths, UpdateTrackNumber, UpdateTrackPosition);
+
+      // Load settings after changing player
+      if (radioRepeatAll.IsChecked == true)
       {
-        Dispatcher.InvokeAsync(() =>
+        musicPlayer.RepeatSetting = RepeatType.All;
+      }
+      else if (radioRepeatSong.IsChecked == true)
+      {
+        musicPlayer.RepeatSetting = RepeatType.Song;
+      }
+      else if (radioRepeatNone.IsChecked == true)
+      {
+        musicPlayer.RepeatSetting = RepeatType.No;
+      }
+
+      musicPlayer.Volume = (float)volume_slider.Value;
+      musicPlayer.Pitch = (float)speed_slider.Value;
+      //player.UpdateRate = (uint)thread_rate_slider.Value; TODO: remove this slider
+      musicPlayer.MusicList = filePaths;
+    }
+    
+    private async Task UpdateTrackNumber(CancellationToken token)
+    {
+      try
+      {
+        await Dispatcher.InvokeAsync(() =>
         {
           var currentMusic = musicPlayer.CurrentMusic.ToString();
           var currentText = current_music_text_display.Text;
@@ -350,19 +404,26 @@ namespace OpenALMusicPlayer
           {
             current_music_text_display.Text = currentMusic;
           }
-        });
-      };
-
-      Action<double, double> updateTrackPosition = (currentTime, totalTime) =>
+        }, DispatcherPriority.DataBind, token);
+      }
+      catch (TaskCanceledException)
       {
-        Dispatcher.InvokeAsync(() =>
+        Trace.WriteLine("Task cancelled updating track number");
+      }
+    }
+
+    private async Task UpdateTrackPosition(double currentTime, double totalTime, CancellationToken token)
+    {
+      try
+      {
+        await Dispatcher.InvokeAsync(() =>
         {
-          var current_time = TimeSpan.FromSeconds(currentTime);
-          var total_time = TimeSpan.FromSeconds(totalTime);
+          var ct = TimeSpan.FromSeconds(currentTime);
+          var tt = TimeSpan.FromSeconds(totalTime);
 
           if (musicPlayer.Status != PlayerState.Stopped)
           {
-            if (musicPlayer.TrackTotalTime > 0)
+            if (!positionMoving && musicPlayer.TrackTotalTime > 0)
             {
               var ratio = musicPlayer.TrackCurrentTime / musicPlayer.TrackTotalTime;
               if (audio_position_slider.Value != ratio)
@@ -371,7 +432,7 @@ namespace OpenALMusicPlayer
               }
             }
 
-            var pos_text = $"{(int)current_time.TotalMinutes}:{current_time.Seconds:00} / {(int)total_time.TotalMinutes}:{total_time.Seconds:00}";
+            var pos_text = $"{(int)ct.TotalMinutes}:{ct.Seconds:00} / {(int)tt.TotalMinutes}:{tt.Seconds:00}";
             if (position_text_display.Text != pos_text)
             {
               position_text_display.Text = pos_text;
@@ -399,29 +460,12 @@ namespace OpenALMusicPlayer
               position_text_display.Text = "0:00 / 0:00";
             }
           }
-        });
-      };
-
-      musicPlayer = new MusicPlayer((string)DeviceChoice.SelectedValue, filePaths, updateTrackNumber, updateTrackPosition);
-
-      // Load settings after changing player
-      if (radioRepeatAll.IsChecked == true)
-      {
-        musicPlayer.RepeatSetting = RepeatType.All;
+        }, DispatcherPriority.DataBind, token);
       }
-      else if (radioRepeatSong.IsChecked == true)
+      catch (TaskCanceledException)
       {
-        musicPlayer.RepeatSetting = RepeatType.Song;
+        Trace.WriteLine("Task cancelled updating track position");
       }
-      else if (radioRepeatNone.IsChecked == true)
-      {
-        musicPlayer.RepeatSetting = RepeatType.No;
-      }
-
-      musicPlayer.Volume = (float)volume_slider.Value;
-      musicPlayer.Pitch = (float)speed_slider.Value;
-      //player.UpdateRate = (uint)thread_rate_slider.Value; TODO: remove this slider
-      musicPlayer.MusicList = filePaths;
     }
 
     private void Window_Closing(object sender, EventArgs e)

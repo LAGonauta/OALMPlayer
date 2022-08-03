@@ -1,14 +1,9 @@
 ﻿namespace OpenALMusicPlayer.AudioPlayer
 {
-  internal enum PlayerState : byte
+  internal enum PlayerState
   {
     Stopped,
-    StartPlayback,
     Playing,
-    Paused,
-    ChangingTrack,
-    Pausing,
-    Unpausing,
-    StopPlayback
+    Paused
   }
 }
