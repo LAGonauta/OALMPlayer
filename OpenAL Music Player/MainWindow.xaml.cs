@@ -122,18 +122,19 @@ namespace OpenALMusicPlayer
     {
       var playlistItems = await Task.Run(
         filePaths
-        .Select((path, index) =>
+        .Select(filePath =>
         {
           try
           {
-            var file = TagLib.File.Create(path);
+            var file = TagLib.File.Create(filePath);
             return new PlaylistItemsList()
             {
-              Number = (index + 1).ToString(),
               Title = file.Tag.Title,
               Performer = file.Tag.FirstPerformer,
               Album = file.Tag.Album,
-              FileName = Path.GetFileName(path)
+              DiscNumber = file.Tag.Disc,
+              FileName = Path.GetFileName(filePath),
+              TrackNumber = file.Tag.Track
             };
           }
           catch (TagLib.UnsupportedFormatException ex)
@@ -141,10 +142,17 @@ namespace OpenALMusicPlayer
             Trace.WriteLine($"Format not supported: {ex.Message}");
             return new PlaylistItemsList()
             {
-              Number = (index + 1).ToString(),
-              FileName = Path.GetFileName(path)
+              FileName = Path.GetFileName(filePath)
             };
           }
+        })
+        .OrderBy(item => item.DiscNumber)
+        .ThenBy(item => item.Album)
+        .ThenBy(item => item.TrackNumber)
+        .ThenBy(item => item.FileName)
+        .Select((item, index) => {
+          item.Number = (index + 1).ToString();
+          return item;
         })
         .ToList);
 
