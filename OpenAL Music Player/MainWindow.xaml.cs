@@ -17,6 +17,8 @@ using System.Windows.Input;
 using System.Windows.Forms;
 using Timer = System.Windows.Forms.Timer;
 using System.Windows.Threading;
+using SharpHook;
+using SharpHook.Native;
 
 // TODO:
 // Use INotifyPropertyChanged 
@@ -48,6 +50,8 @@ namespace OpenALMusicPlayer
     // Info text
     private readonly Timer infoTextTimer;
     private readonly Timer cpuTimer;
+
+    private IGlobalHook globalHook;
 
     NotifyIcon ni;
 
@@ -123,6 +127,45 @@ namespace OpenALMusicPlayer
         filePaths = newPaths;
         await GeneratePlaylist(newPaths);
       }
+
+      globalHook = new SimpleGlobalHook();
+      globalHook.KeyPressed += async (s, e) =>
+      {
+        Func<Task> action = null;
+        switch (e.Data.KeyCode)
+        {
+          case KeyCode.VcMediaPlay:
+            action = async () =>
+            {
+              await Play_Click_Async(s, null);
+            };
+            break;
+          case KeyCode.VcMediaStop:
+            action = () =>
+            {
+              Stop_Click(s, null);
+              return Task.CompletedTask;
+            };
+            break;
+          case KeyCode.VcMediaPrevious:
+            action = async () =>
+            {
+              await Back_Click_Async(sender, null);
+            };
+            break;
+          case KeyCode.VcMediaNext:
+            action = async () =>
+            {
+              await Next_Click_Async(sender, null);
+            };
+            break;
+          default:
+            return;
+        }
+        await Dispatcher.InvokeAsync(async () => await action());
+      };
+
+      await globalHook.RunAsync().ConfigureAwait(false);
     }
 
     public async Task GeneratePlaylist(List<string> filePaths)
@@ -191,6 +234,11 @@ namespace OpenALMusicPlayer
 
     private async void Play_Click(object sender, RoutedEventArgs e)
     {
+      await Play_Click_Async(sender, e);
+    }
+
+    private async Task Play_Click_Async(object sender, RoutedEventArgs e)
+    {
       if (filePaths != null && filePaths.Count > 0)
       {
         playlistItems.SelectedIndex = musicPlayer.CurrentMusicIndex - 1;
@@ -217,6 +265,11 @@ namespace OpenALMusicPlayer
 
     private async void Next_Click(object sender, RoutedEventArgs e)
     {
+      await Next_Click_Async(sender, e);
+    }
+
+    private async Task Next_Click_Async(object sender, RoutedEventArgs e)
+    {
       if (filePaths != null && filePaths.Count > 0)
       {
         SoundPlayPause.Content = "Pause";
@@ -233,6 +286,11 @@ namespace OpenALMusicPlayer
     }
 
     private async void Back_Click(object sender, RoutedEventArgs e)
+    {
+      await Back_Click_Async(sender, e);
+    }
+
+    private async Task Back_Click_Async(object sender, RoutedEventArgs e)
     {
       if (filePaths != null && filePaths.Count > 0)
       {
@@ -387,7 +445,6 @@ namespace OpenALMusicPlayer
       {
         musicPlayer.RepeatSetting = RepeatType.No;
       }
-
       musicPlayer.Volume = (float)volume_slider.Value;
       musicPlayer.Pitch = (float)speed_slider.Value;
       //player.UpdateRate = (uint)thread_rate_slider.Value; TODO: remove this slider
@@ -486,6 +543,7 @@ namespace OpenALMusicPlayer
       Properties.Settings.Default.LastPlaylist.AddRange(filePaths.ToArray());
       Properties.Settings.Default.Save();
 
+      globalHook?.Dispose();
       musicPlayer?.Dispose();
       cpuTimer.Stop();
       cpuTimer.Dispose();
