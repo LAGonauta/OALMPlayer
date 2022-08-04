@@ -29,7 +29,7 @@ namespace OpenALMusicPlayer.AudioPlayer
     /// <summary>
     /// Starts at 1 to the user, but internally starts at zero.
     /// </summary>
-    public int CurrentMusic
+    public int CurrentMusicIndex
     {
       get => currentMusic + 1;
       set => currentMusic = value - 1;
@@ -133,7 +133,7 @@ namespace OpenALMusicPlayer.AudioPlayer
       {
         if (RepeatSetting == RepeatType.All)
         {
-          CurrentMusic = (CurrentMusic % MusicList.Count) + 1;
+          CurrentMusicIndex = (CurrentMusicIndex % MusicList.Count) + 1;
         }
         else if (RepeatSetting == RepeatType.Song)
         {
@@ -141,32 +141,32 @@ namespace OpenALMusicPlayer.AudioPlayer
         }
         else if (RepeatSetting == RepeatType.No)
         {
-          if (CurrentMusic == MusicList.Count)
+          if (CurrentMusicIndex == MusicList.Count)
           {
             Status = PlayerState.Stopped;
           }
           else
           {
-            CurrentMusic = (CurrentMusic % MusicList.Count) + 1;
+            CurrentMusicIndex = (CurrentMusicIndex % MusicList.Count) + 1;
           }
         }
       }
       else
       {
-        CurrentMusic = (CurrentMusic % MusicList.Count) + 1;
+        CurrentMusicIndex = (CurrentMusicIndex % MusicList.Count) + 1;
         audioPlayer.Stop();
       }
     }
 
     public void PreviousTrack()
     {
-      if (CurrentMusic == 1)
+      if (CurrentMusicIndex == 1)
       {
-        CurrentMusic = MusicList.Count;
+        CurrentMusicIndex = MusicList.Count;
       }
       else
       {
-        CurrentMusic = CurrentMusic - 1;
+        CurrentMusicIndex = CurrentMusicIndex - 1;
       }
       audioPlayer.Stop();
     }

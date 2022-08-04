@@ -193,7 +193,7 @@ namespace OpenALMusicPlayer
     {
       if (filePaths != null && filePaths.Count > 0)
       {
-        playlistItems.SelectedIndex = musicPlayer.CurrentMusic - 1;
+        playlistItems.SelectedIndex = musicPlayer.CurrentMusicIndex - 1;
         if (musicPlayer.Status == PlayerState.Paused)
         {
           musicPlayer.Unpause();
@@ -221,7 +221,7 @@ namespace OpenALMusicPlayer
       {
         SoundPlayPause.Content = "Pause";
         musicPlayer.NextTrack(false);
-        playlistItems.SelectedIndex = musicPlayer.CurrentMusic - 1;
+        playlistItems.SelectedIndex = musicPlayer.CurrentMusicIndex - 1;
         await musicPlayer.Play(0);
       }
     }
@@ -238,7 +238,7 @@ namespace OpenALMusicPlayer
       {
         SoundPlayPause.Content = "Pause";
         musicPlayer.PreviousTrack();
-        playlistItems.SelectedIndex = musicPlayer.CurrentMusic - 1;
+        playlistItems.SelectedIndex = musicPlayer.CurrentMusicIndex - 1;
         await musicPlayer.Play(0);
       }
     }
@@ -255,7 +255,7 @@ namespace OpenALMusicPlayer
       {
         SoundPlayPause.Content = "Pause";
         // SelectedIndex is zero indexed
-        musicPlayer.CurrentMusic = playlistItems.SelectedIndex + 1;
+        musicPlayer.CurrentMusicIndex = playlistItems.SelectedIndex + 1;
         await musicPlayer.Play(0);
       }
     }
@@ -366,8 +366,10 @@ namespace OpenALMusicPlayer
       }
     }
 
-    private void DeviceChoice_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private async void DeviceChoice_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+      var oldMusicIndex = musicPlayer?.CurrentMusicIndex ?? 1;
+      var oldState = musicPlayer?.Status ?? PlayerState.Stopped;
       musicPlayer?.Dispose();
 
       musicPlayer = new MusicPlayer((string)DeviceChoice.SelectedValue, filePaths, UpdateTrackNumber, UpdateTrackPosition);
@@ -390,6 +392,11 @@ namespace OpenALMusicPlayer
       musicPlayer.Pitch = (float)speed_slider.Value;
       //player.UpdateRate = (uint)thread_rate_slider.Value; TODO: remove this slider
       musicPlayer.MusicList = filePaths;
+      musicPlayer.CurrentMusicIndex = oldMusicIndex;
+      if (oldState == PlayerState.Playing)
+      {
+        await musicPlayer.Play(audio_position_slider.Value);
+      }
     }
     
     private async Task UpdateTrackNumber(CancellationToken token)
@@ -398,7 +405,7 @@ namespace OpenALMusicPlayer
       {
         await Dispatcher.InvokeAsync(() =>
         {
-          var currentMusic = musicPlayer.CurrentMusic.ToString();
+          var currentMusic = musicPlayer.CurrentMusicIndex.ToString();
           var currentText = current_music_text_display.Text;
           if (currentText != currentMusic)
           {
@@ -438,9 +445,9 @@ namespace OpenALMusicPlayer
               position_text_display.Text = pos_text;
             }
 
-            if (playlistItems.SelectedIndex != musicPlayer.CurrentMusic - 1 && !playlistItems.IsMouseOver)
+            if (playlistItems.SelectedIndex != musicPlayer.CurrentMusicIndex - 1 && !playlistItems.IsMouseOver)
             {
-              playlistItems.SelectedIndex = musicPlayer.CurrentMusic - 1;
+              playlistItems.SelectedIndex = musicPlayer.CurrentMusicIndex - 1;
             }
           }
           else
