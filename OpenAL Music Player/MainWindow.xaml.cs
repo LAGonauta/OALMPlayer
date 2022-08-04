@@ -128,7 +128,7 @@ namespace OpenALMusicPlayer
         await GeneratePlaylist(newPaths);
       }
 
-      globalHook = new SimpleGlobalHook();
+      globalHook = new TaskPoolGlobalHook();
       globalHook.KeyPressed += async (s, e) =>
       {
         Func<Task> action = null;
