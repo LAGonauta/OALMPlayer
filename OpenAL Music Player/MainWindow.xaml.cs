@@ -35,9 +35,6 @@ namespace OpenALMusicPlayer
     #endregion Fields
 
     #region Variables
-    // Files in the directory
-    static List<string> filePaths = new();
-
     // Generate playlist
     public readonly ObservableCollection<PlaylistItemsList> items = new();
 
@@ -119,15 +116,14 @@ namespace OpenALMusicPlayer
       UpdateDeviceList(devices);
       if (Properties.Settings.Default.LastPlaylist != null)
       {
-        var newPaths = await Task.Run(
+        var filePaths = await Task.Run(
           Properties.Settings.Default.LastPlaylist
           .AsParallel()
           .AsOrdered()
           .Cast<string>()
           .Where(File.Exists)
           .ToList);
-        filePaths = newPaths;
-        await GeneratePlaylist(newPaths);
+        await GeneratePlaylist(filePaths);
       }
 
       globalHook = new TaskPoolGlobalHook();
@@ -152,7 +148,7 @@ namespace OpenALMusicPlayer
     public async Task GeneratePlaylist(List<string> filePaths)
     {
       playlistItems.IsHitTestVisible = false;
-      var playlistItems = await Task.Run(
+      var processedItems = await Task.Run(
         filePaths
         .AsParallel()
         .Select(filePath =>
@@ -162,6 +158,7 @@ namespace OpenALMusicPlayer
             var file = TagLib.File.Create(filePath);
             return new PlaylistItemsList()
             {
+              FilePath = filePath,
               Title = file.Tag.Title,
               Performer = file.Tag.FirstPerformer,
               Album = file.Tag.Album,
@@ -175,6 +172,7 @@ namespace OpenALMusicPlayer
             Trace.WriteLine($"Format not supported: {ex.Message}");
             return new PlaylistItemsList()
             {
+              FilePath = filePath,
               FileName = Path.GetFileName(filePath)
             };
           }
@@ -190,12 +188,12 @@ namespace OpenALMusicPlayer
         .ToList);
 
       items.Clear();
-      playlistItems.ForEach(item => items.Add(item));
+      processedItems.ForEach(item => items.Add(item));
       playlistItems.IsHitTestVisible = true;
 
       if (musicPlayer != null)
       {
-        musicPlayer.MusicList = filePaths; 
+        musicPlayer.MusicList = processedItems.Select(item => item.FilePath).ToList();
       }
     }
 
@@ -209,7 +207,7 @@ namespace OpenALMusicPlayer
       if (result == System.Windows.Forms.DialogResult.OK)
       {
         var allowedExtensions = CodecFactory.Instance.GetSupportedFileExtensions();
-        filePaths = Directory.GetFiles(dlgOpen.SelectedPath)
+        var filePaths = Directory.GetFiles(dlgOpen.SelectedPath)
           .Where(file => allowedExtensions.Any(file.ToLowerInvariant().EndsWith))
           .ToList();
         await GeneratePlaylist(filePaths);
@@ -223,7 +221,7 @@ namespace OpenALMusicPlayer
 
     private async Task Play_Click_Async(object sender, RoutedEventArgs e)
     {
-      if (filePaths != null && filePaths.Count > 0)
+      if (playlistItems != null && playlistItems.Items.Count > 0)
       {
         playlistItems.SelectedIndex = musicPlayer.CurrentMusicIndex - 1;
         if (musicPlayer.Status == PlayerState.Paused)
@@ -254,7 +252,7 @@ namespace OpenALMusicPlayer
 
     private async Task Next_Click_Async(object sender, RoutedEventArgs e)
     {
-      if (filePaths != null && filePaths.Count > 0)
+      if (playlistItems != null && playlistItems.Items.Count > 0)
       {
         SoundPlayPause.Content = "Pause";
         musicPlayer.NextTrack(false);
@@ -276,7 +274,7 @@ namespace OpenALMusicPlayer
 
     private async Task Back_Click_Async(object sender, RoutedEventArgs e)
     {
-      if (filePaths != null && filePaths.Count > 0)
+      if (playlistItems != null && playlistItems.Items.Count > 0)
       {
         SoundPlayPause.Content = "Pause";
         musicPlayer.PreviousTrack();
@@ -414,7 +412,7 @@ namespace OpenALMusicPlayer
       var oldState = musicPlayer?.Status ?? PlayerState.Stopped;
       musicPlayer?.Dispose();
 
-      musicPlayer = new MusicPlayer((string)DeviceChoice.SelectedValue, filePaths, UpdateTrackNumber, UpdateTrackPosition);
+      musicPlayer = new MusicPlayer((string)DeviceChoice.SelectedValue, items.Select(item => item.FilePath).ToList(), UpdateTrackNumber, UpdateTrackPosition);
 
       // Load settings after changing player
       if (radioRepeatAll.IsChecked == true)
@@ -432,7 +430,6 @@ namespace OpenALMusicPlayer
       musicPlayer.Volume = (float)volume_slider.Value;
       musicPlayer.Pitch = (float)speed_slider.Value;
       //player.UpdateRate = (uint)thread_rate_slider.Value; TODO: remove this slider
-      musicPlayer.MusicList = filePaths;
       musicPlayer.CurrentMusicIndex = oldMusicIndex;
       if (oldState == PlayerState.Playing)
       {
@@ -524,7 +521,7 @@ namespace OpenALMusicPlayer
       Properties.Settings.Default.Speed = speed_slider.Value;
       Properties.Settings.Default.UpdateRate = (uint)thread_rate_slider.Value;
       Properties.Settings.Default.LastPlaylist = new();
-      Properties.Settings.Default.LastPlaylist.AddRange(filePaths.ToArray());
+      Properties.Settings.Default.LastPlaylist.AddRange(items.Select(item => item.FilePath).ToArray());
       Properties.Settings.Default.Save();
 
       globalHook?.Dispose();

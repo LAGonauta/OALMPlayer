@@ -2,6 +2,7 @@
 {
   public class PlaylistItemsList
   {
+    public string FilePath { get; set; }
     public string Number { get; set; }
     public string Title { get; set; }
     public string Performer { get; set; }
