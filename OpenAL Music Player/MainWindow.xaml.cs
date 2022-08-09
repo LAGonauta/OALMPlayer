@@ -20,6 +20,7 @@ using System.Windows.Threading;
 using SharpHook;
 using SharpHook.Native;
 using OpenALMusicPlayer.AudioEngine;
+using System.ComponentModel;
 
 // TODO:
 // Use INotifyPropertyChanged 
@@ -37,7 +38,7 @@ namespace OpenALMusicPlayer
 
     #region Variables
     // Generate playlist
-    public readonly ObservableCollection<PlaylistItemsList> items = new();
+    public readonly ObservableCollection<PlaylistItem> items = new();
 
     // OpenAL controls
     private MusicPlayer musicPlayer;
@@ -78,6 +79,10 @@ namespace OpenALMusicPlayer
 
       // Set GUI
       playlistItems.ItemsSource = items;
+      playlistItems.Items.SortDescriptions.Add(new SortDescription("DiscNumber", ListSortDirection.Ascending));
+      playlistItems.Items.SortDescriptions.Add(new SortDescription("Album", ListSortDirection.Ascending));
+      playlistItems.Items.SortDescriptions.Add(new SortDescription("TrackNumber", ListSortDirection.Ascending));
+      playlistItems.Items.SortDescriptions.Add(new SortDescription("FileName", ListSortDirection.Ascending));
 
       speed_slider.Value = Properties.Settings.Default.Speed;
       volume_slider.Value = Properties.Settings.Default.Volume;
@@ -117,14 +122,7 @@ namespace OpenALMusicPlayer
       UpdateDeviceList(devices);
       if (Properties.Settings.Default.LastPlaylist != null)
       {
-        var filePaths = await Task.Run(
-          Properties.Settings.Default.LastPlaylist
-          .AsParallel()
-          .AsOrdered()
-          .Cast<string>()
-          .Where(File.Exists)
-          .ToList);
-        await GeneratePlaylist(filePaths);
+        await GeneratePlaylist(Properties.Settings.Default.LastPlaylist.Cast<string>().ToList());
       }
 
       globalHook = new TaskPoolGlobalHook();
@@ -149,15 +147,17 @@ namespace OpenALMusicPlayer
     public async Task GeneratePlaylist(List<string> filePaths)
     {
       playlistItems.IsHitTestVisible = false;
+      items.Clear();
       var processedItems = await Task.Run(
         filePaths
         .AsParallel()
+        .Where(File.Exists)
         .Select(filePath =>
         {
           try
           {
             var file = TagLib.File.Create(filePath);
-            return new PlaylistItemsList()
+            return new PlaylistItem()
             {
               FilePath = filePath,
               Title = file.Tag.Title,
@@ -171,12 +171,17 @@ namespace OpenALMusicPlayer
           catch (TagLib.UnsupportedFormatException ex)
           {
             Trace.WriteLine($"Format not supported: {ex.Message}");
-            return new PlaylistItemsList()
+            return new PlaylistItem()
             {
               FilePath = filePath,
               FileName = Path.GetFileName(filePath)
             };
           }
+        })
+        .Select(item =>
+        {
+          Dispatcher.Invoke(() => items.Add(item));
+          return item;
         })
         .OrderBy(item => item.DiscNumber)
         .ThenBy(item => item.Album)
@@ -187,9 +192,7 @@ namespace OpenALMusicPlayer
           return item;
         })
         .ToList);
-
-      items.Clear();
-      processedItems.ForEach(item => items.Add(item));
+      playlistItems.Items.Refresh();
       playlistItems.IsHitTestVisible = true;
 
       if (musicPlayer != null)

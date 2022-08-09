@@ -1,6 +1,6 @@
 ﻿namespace OpenALMusicPlayer
 {
-  public class PlaylistItemsList
+  public class PlaylistItem
   {
     public string FilePath { get; set; }
     public string Number { get; set; }
