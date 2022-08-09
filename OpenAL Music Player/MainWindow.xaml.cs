@@ -19,6 +19,7 @@ using Timer = System.Windows.Forms.Timer;
 using System.Windows.Threading;
 using SharpHook;
 using SharpHook.Native;
+using OpenALMusicPlayer.AudioEngine;
 
 // TODO:
 // Use INotifyPropertyChanged 
