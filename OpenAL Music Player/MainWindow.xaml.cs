@@ -131,38 +131,17 @@ namespace OpenALMusicPlayer
       globalHook = new TaskPoolGlobalHook();
       globalHook.KeyPressed += async (s, e) =>
       {
-        Func<Task> action = null;
-        switch (e.Data.KeyCode)
+        Func<Task> action = e.Data.KeyCode switch {
+          KeyCode.VcMediaPlay => async () => await Play_Click_Async(s, null),
+          KeyCode.VcMediaStop => () => { Stop_Click(s, null); return Task.CompletedTask; },
+          KeyCode.VcMediaPrevious => async () => await Back_Click_Async(s, null),
+          KeyCode.VcMediaNext => async () => await Next_Click_Async(s, null),
+          _ => null
+        };
+        if (action != null)
         {
-          case KeyCode.VcMediaPlay:
-            action = async () =>
-            {
-              await Play_Click_Async(s, null);
-            };
-            break;
-          case KeyCode.VcMediaStop:
-            action = () =>
-            {
-              Stop_Click(s, null);
-              return Task.CompletedTask;
-            };
-            break;
-          case KeyCode.VcMediaPrevious:
-            action = async () =>
-            {
-              await Back_Click_Async(sender, null);
-            };
-            break;
-          case KeyCode.VcMediaNext:
-            action = async () =>
-            {
-              await Next_Click_Async(sender, null);
-            };
-            break;
-          default:
-            return;
+          await Dispatcher.InvokeAsync(async () => await action());
         }
-        await Dispatcher.InvokeAsync(async () => await action());
       };
 
       await globalHook.RunAsync().ConfigureAwait(false);
