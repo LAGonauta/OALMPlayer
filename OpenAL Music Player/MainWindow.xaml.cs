@@ -151,6 +151,7 @@ namespace OpenALMusicPlayer
 
     public async Task GeneratePlaylist(List<string> filePaths)
     {
+      playlistItems.IsHitTestVisible = false;
       var playlistItems = await Task.Run(
         filePaths
         .AsParallel()
@@ -190,6 +191,7 @@ namespace OpenALMusicPlayer
 
       items.Clear();
       playlistItems.ForEach(item => items.Add(item));
+      playlistItems.IsHitTestVisible = true;
 
       if (musicPlayer != null)
       {
