@@ -121,6 +121,8 @@ namespace OpenALMusicPlayer
       {
         var newPaths = await Task.Run(
           Properties.Settings.Default.LastPlaylist
+          .AsParallel()
+          .AsOrdered()
           .Cast<string>()
           .Where(File.Exists)
           .ToList);
@@ -151,6 +153,7 @@ namespace OpenALMusicPlayer
     {
       var playlistItems = await Task.Run(
         filePaths
+        .AsParallel()
         .Select(filePath =>
         {
           try
