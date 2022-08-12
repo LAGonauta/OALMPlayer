@@ -21,6 +21,9 @@ using SharpHook;
 using SharpHook.Native;
 using OpenALMusicPlayer.AudioEngine;
 using System.ComponentModel;
+using OpenALMusicPlayer.GUI.Model;
+using OpenALMusicPlayer.GUI.ViewModel;
+using OpenALMusicPlayer.Helpers;
 
 // TODO:
 // Use INotifyPropertyChanged 
@@ -38,7 +41,7 @@ namespace OpenALMusicPlayer
 
     #region Variables
     // Generate playlist
-    public readonly ObservableCollection<PlaylistItem> items = new();
+    private readonly PlaylistItemViewModel playListItems = new();
 
     // OpenAL controls
     private MusicPlayer musicPlayer;
@@ -78,15 +81,14 @@ namespace OpenALMusicPlayer
       };
 
       // Set GUI
-      playlistItems.ItemsSource = items;
-      playlistItems.Items.SortDescriptions.Add(new SortDescription("DiscNumber", ListSortDirection.Ascending));
-      playlistItems.Items.SortDescriptions.Add(new SortDescription("Album", ListSortDirection.Ascending));
-      playlistItems.Items.SortDescriptions.Add(new SortDescription("TrackNumber", ListSortDirection.Ascending));
-      playlistItems.Items.SortDescriptions.Add(new SortDescription("FileName", ListSortDirection.Ascending));
+      playlist.ItemsSource = playListItems;
+      playlist.Items.SortDescriptions.Add(new SortDescription("DiscNumber", ListSortDirection.Ascending));
+      playlist.Items.SortDescriptions.Add(new SortDescription("Album", ListSortDirection.Ascending));
+      playlist.Items.SortDescriptions.Add(new SortDescription("TrackNumber", ListSortDirection.Ascending));
+      playlist.Items.SortDescriptions.Add(new SortDescription("FileName", ListSortDirection.Ascending));
 
       speed_slider.Value = Properties.Settings.Default.Speed;
       volume_slider.Value = Properties.Settings.Default.Volume;
-      thread_rate_slider.Value = Properties.Settings.Default.UpdateRate;
       switch ((RepeatType)Properties.Settings.Default.Repeat)
       {
         case RepeatType.All:
@@ -146,58 +148,56 @@ namespace OpenALMusicPlayer
 
     public async Task GeneratePlaylist(List<string> filePaths)
     {
-      playlistItems.IsHitTestVisible = false;
-      items.Clear();
+      playlist.IsHitTestVisible = false;
+      playListItems.Clear();
       var processedItems = await Task.Run(
         filePaths
         .AsParallel()
         .Where(File.Exists)
         .Select(filePath =>
         {
-          try
-          {
-            var file = TagLib.File.Create(filePath);
-            return new PlaylistItem()
-            {
-              FilePath = filePath,
-              Title = file.Tag.Title,
-              Performer = file.Tag.FirstPerformer,
-              Album = file.Tag.Album,
-              DiscNumber = file.Tag.Disc,
-              FileName = Path.GetFileName(filePath),
-              TrackNumber = file.Tag.Track
-            };
-          }
-          catch (TagLib.UnsupportedFormatException ex)
-          {
-            Trace.WriteLine($"Format not supported: {ex.Message}");
-            return new PlaylistItem()
-            {
-              FilePath = filePath,
-              FileName = Path.GetFileName(filePath)
-            };
-          }
-        })
-        .Select(item =>
-        {
-          Dispatcher.Invoke(() => items.Add(item));
+          var item = LoadFileTags(filePath);
+          Dispatcher.InvokeAsync(() => playListItems.Add(item));
           return item;
         })
         .OrderBy(item => item.DiscNumber)
         .ThenBy(item => item.Album)
         .ThenBy(item => item.TrackNumber)
         .ThenBy(item => item.FileName)
-        .Select((item, index) => {
-          item.Number = (index + 1).ToString();
-          return item;
-        })
+        .Peek((item, index) => item.Number = (index + 1).ToString())
         .ToList);
-      playlistItems.Items.Refresh();
-      playlistItems.IsHitTestVisible = true;
+      playlist.IsHitTestVisible = true;
 
       if (musicPlayer != null)
       {
         musicPlayer.MusicList = processedItems.Select(item => item.FilePath).ToList();
+      }
+    }
+
+    private PlaylistItem LoadFileTags(string filePath)
+    {
+      try
+      {
+        var file = TagLib.File.Create(filePath);
+        return new PlaylistItem()
+        {
+          FilePath = filePath,
+          Title = file.Tag.Title,
+          Performer = file.Tag.FirstPerformer,
+          Album = file.Tag.Album,
+          DiscNumber = file.Tag.Disc,
+          FileName = Path.GetFileName(filePath),
+          TrackNumber = file.Tag.Track
+        };
+      }
+      catch (TagLib.UnsupportedFormatException ex)
+      {
+        Trace.WriteLine($"Format not supported: {ex.Message}");
+        return new PlaylistItem()
+        {
+          FilePath = filePath,
+          FileName = Path.GetFileName(filePath)
+        };
       }
     }
 
@@ -225,9 +225,9 @@ namespace OpenALMusicPlayer
 
     private async Task Play_Click_Async(object sender, RoutedEventArgs e)
     {
-      if (playlistItems != null && playlistItems.Items.Count > 0)
+      if (playlist != null && playlist.Items.Count > 0)
       {
-        playlistItems.SelectedIndex = musicPlayer.CurrentMusicIndex - 1;
+        playlist.SelectedIndex = musicPlayer.CurrentMusicIndex - 1;
         if (musicPlayer.Status == PlayerState.Paused)
         {
           musicPlayer.Unpause();
@@ -256,11 +256,11 @@ namespace OpenALMusicPlayer
 
     private async Task Next_Click_Async(object sender, RoutedEventArgs e)
     {
-      if (playlistItems != null && playlistItems.Items.Count > 0)
+      if (playlist != null && playlist.Items.Count > 0)
       {
         SoundPlayPause.Content = "Pause";
         musicPlayer.NextTrack(false);
-        playlistItems.SelectedIndex = musicPlayer.CurrentMusicIndex - 1;
+        playlist.SelectedIndex = musicPlayer.CurrentMusicIndex - 1;
         await musicPlayer.Play(0);
       }
     }
@@ -278,11 +278,11 @@ namespace OpenALMusicPlayer
 
     private async Task Back_Click_Async(object sender, RoutedEventArgs e)
     {
-      if (playlistItems != null && playlistItems.Items.Count > 0)
+      if (playlist != null && playlist.Items.Count > 0)
       {
         SoundPlayPause.Content = "Pause";
         musicPlayer.PreviousTrack();
-        playlistItems.SelectedIndex = musicPlayer.CurrentMusicIndex - 1;
+        playlist.SelectedIndex = musicPlayer.CurrentMusicIndex - 1;
         await musicPlayer.Play(0);
       }
     }
@@ -295,11 +295,11 @@ namespace OpenALMusicPlayer
 
     private async void PlaylistItem_MouseDoubleClick(object sender, RoutedEventArgs e)
     {
-      if (playlistItems.SelectedIndex != -1)
+      if (playlist.SelectedIndex != -1)
       {
         SoundPlayPause.Content = "Pause";
         // SelectedIndex is zero indexed
-        musicPlayer.CurrentMusicIndex = playlistItems.SelectedIndex + 1;
+        musicPlayer.CurrentMusicIndex = playlist.SelectedIndex + 1;
         await musicPlayer.Play(0);
       }
     }
@@ -416,7 +416,7 @@ namespace OpenALMusicPlayer
       var oldState = musicPlayer?.Status ?? PlayerState.Stopped;
       musicPlayer?.Dispose();
 
-      musicPlayer = new MusicPlayer((string)DeviceChoice.SelectedValue, items.Select(item => item.FilePath).ToList(), UpdateTrackNumber, UpdateTrackPosition);
+      musicPlayer = new MusicPlayer((string)DeviceChoice.SelectedValue, playListItems.Select(item => item.FilePath).ToList(), UpdateTrackNumber, UpdateTrackPosition);
 
       // Load settings after changing player
       if (radioRepeatAll.IsChecked == true)
@@ -487,9 +487,9 @@ namespace OpenALMusicPlayer
               position_text_display.Text = pos_text;
             }
 
-            if (playlistItems.SelectedIndex != musicPlayer.CurrentMusicIndex - 1 && !playlistItems.IsMouseOver)
+            if (playlist.SelectedIndex != musicPlayer.CurrentMusicIndex - 1 && !playlist.IsMouseOver)
             {
-              playlistItems.SelectedIndex = musicPlayer.CurrentMusicIndex - 1;
+              playlist.SelectedIndex = musicPlayer.CurrentMusicIndex - 1;
             }
           }
           else
@@ -523,9 +523,8 @@ namespace OpenALMusicPlayer
       Properties.Settings.Default.Repeat = (byte)musicPlayer.RepeatSetting;
       Properties.Settings.Default.Volume = volume_slider.Value;
       Properties.Settings.Default.Speed = speed_slider.Value;
-      Properties.Settings.Default.UpdateRate = (uint)thread_rate_slider.Value;
       Properties.Settings.Default.LastPlaylist = new();
-      Properties.Settings.Default.LastPlaylist.AddRange(items.Select(item => item.FilePath).ToArray());
+      Properties.Settings.Default.LastPlaylist.AddRange(playListItems.Select(item => item.FilePath).ToArray());
       Properties.Settings.Default.Save();
 
       globalHook?.Dispose();
