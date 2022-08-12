@@ -3,17 +3,21 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:tb="clr-namespace:H.NotifyIcon;assembly=H.NotifyIcon.Wpf"
         mc:Ignorable="d"
         Title="OpenAL Music Player" MinHeight="480" MinWidth="640" Height="600" Width="800"
         Loaded="Window_Loaded"
         Closing="Window_Closing">
-
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
+        <tb:TaskbarIcon
+            x:Name="windowNotifyIcon"
+            ToolTipText="OpenAL Music Player"
+        />
         <Menu Grid.Row="0">
             <MenuItem Header="_File " >
                 <MenuItem Header="_Open folder..." Click="Open_Click"/>

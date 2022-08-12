@@ -14,8 +14,6 @@ using System.Threading.Tasks;
 using System.Threading;
 using OpenALMusicPlayer.AudioPlayer;
 using System.Windows.Input;
-using System.Windows.Forms;
-using Timer = System.Windows.Forms.Timer;
 using System.Windows.Threading;
 using SharpHook;
 using SharpHook.Native;
@@ -24,6 +22,7 @@ using System.ComponentModel;
 using OpenALMusicPlayer.GUI.Model;
 using OpenALMusicPlayer.GUI.ViewModel;
 using OpenALMusicPlayer.Helpers;
+using Ookii.Dialogs.Wpf;
 
 // TODO:
 // Use INotifyPropertyChanged 
@@ -55,25 +54,19 @@ namespace OpenALMusicPlayer
 
     private IGlobalHook globalHook;
 
-    NotifyIcon ni;
-
     private bool positionMoving = false;
+
+    private System.Drawing.Icon icon;
 
     #endregion
     public MainWindow()
     {
       InitializeComponent();
 
-      var icon = System.Drawing.Icon.ExtractAssociatedIcon(Assembly.GetEntryAssembly().ManifestModule.Name);
+      icon = System.Drawing.Icon.ExtractAssociatedIcon(Assembly.GetEntryAssembly().ManifestModule.Name);
 
-      ni = new NotifyIcon()
-      {
-        Visible = true,
-        Text = Title,
-        Icon = icon
-      };
-
-      ni.DoubleClick += (sender, e) =>
+      windowNotifyIcon.Icon = icon;
+      windowNotifyIcon.TrayMouseDoubleClick += (sender, e) =>
       {
         this.Show();
         this.Activate();
@@ -106,16 +99,10 @@ namespace OpenALMusicPlayer
       CodecFactory.Instance.Register("ogg-vorbis", new CodecFactoryEntry(s => new NVorbisSource(s).ToWaveSource(), ".ogg"));
 
       // Starting CPU usage timer
-      cpuTimer = new Timer();
-      cpuTimer.Interval = 2000;
-      cpuTimer.Tick += new EventHandler(this.UpdateCPUUsage);
-      cpuTimer.Start();
+      cpuTimer = new Timer(async (state) => await Dispatcher.InvokeAsync(UpdateCPUUsage), null, TimeSpan.Zero, TimeSpan.FromMilliseconds(2000));
 
       // Starting GUI information update timer
-      infoTextTimer = new Timer();
-      infoTextTimer.Interval = 1000;
-      infoTextTimer.Tick += new EventHandler(this.UpdateInfoText);
-      infoTextTimer.Start();
+      infoTextTimer = new Timer(async (state) => await Dispatcher.InvokeAsync(UpdateInfoText), null, TimeSpan.Zero, TimeSpan.FromMilliseconds(1000));
     }
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
@@ -204,14 +191,17 @@ namespace OpenALMusicPlayer
     #region GUI stuff
     private async void Open_Click(object sender, RoutedEventArgs e)
     {
-      using var dlgOpen = new FolderBrowserDialog();
-      dlgOpen.Description = "Escolha a pasta para tocar";
+      var dialog = new VistaFolderBrowserDialog
+      {
+        Description = "Escolha a pasta para tocar",
+        UseDescriptionForTitle = true
+      };
 
-      var result = dlgOpen.ShowDialog();
-      if (result == System.Windows.Forms.DialogResult.OK)
+      var result = dialog.ShowDialog(this) ?? false;
+      if (result)
       {
         var allowedExtensions = CodecFactory.Instance.GetSupportedFileExtensions();
-        var filePaths = Directory.GetFiles(dlgOpen.SelectedPath)
+        var filePaths = Directory.GetFiles(dialog.SelectedPath)
           .Where(file => allowedExtensions.Any(file.ToLowerInvariant().EndsWith))
           .ToList();
         await GeneratePlaylist(filePaths);
@@ -317,7 +307,7 @@ namespace OpenALMusicPlayer
       }      
     }
 
-    private async void Slider_PositionDrag(object sender, System.Windows.Input.MouseEventArgs e)
+    private async void Slider_PositionDrag(object sender, MouseEventArgs e)
     {
       if (e.LeftButton == MouseButtonState.Pressed)
       {
@@ -354,12 +344,12 @@ namespace OpenALMusicPlayer
       }
     }
 
-    private void UpdateCPUUsage(object _, EventArgs __)
+    private void UpdateCPUUsage()
     {
       CPUUsagePercent.Text = $"{theCPUCounter.NextValue() / Environment.ProcessorCount:0.0}%";
     }
 
-    private void UpdateInfoText(object _, EventArgs __)
+    private void UpdateInfoText()
     {
       // Updating the values only when they change. Is this faster or slower than just updating them?
       if (musicPlayer != null)
@@ -433,7 +423,6 @@ namespace OpenALMusicPlayer
       }
       musicPlayer.Volume = (float)volume_slider.Value;
       musicPlayer.Pitch = (float)speed_slider.Value;
-      //player.UpdateRate = (uint)thread_rate_slider.Value; TODO: remove this slider
       musicPlayer.CurrentMusicIndex = oldMusicIndex;
       if (oldState == PlayerState.Playing)
       {
@@ -529,12 +518,11 @@ namespace OpenALMusicPlayer
 
       globalHook?.Dispose();
       musicPlayer?.Dispose();
-      cpuTimer.Stop();
       cpuTimer.Dispose();
-      infoTextTimer.Stop();
       infoTextTimer.Dispose();
 
-      ni.Visible = false;
+      windowNotifyIcon.Dispose();
+      icon.Dispose();
     }
     #endregion
 
