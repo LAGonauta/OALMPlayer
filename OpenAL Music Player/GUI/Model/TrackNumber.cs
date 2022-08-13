@@ -1,4 +1,6 @@
-﻿namespace OpenALMusicPlayer.GUI.Model
+﻿using Common.Model;
+
+namespace OpenALMusicPlayer.GUI.Model
 {
   internal class TrackNumber : BaseModel, ITrackNumber
   {

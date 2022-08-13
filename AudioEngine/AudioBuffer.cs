@@ -1,4 +1,4 @@
-﻿namespace OpenALMusicPlayer.AudioEngine
+﻿namespace AudioEngine
 {
   internal record AudioBuffer
   {

@@ -4,7 +4,7 @@ using System.IO;
 using CSCore;
 using NVorbis;
 
-namespace OpenALMusicPlayer.AudioEngine
+namespace AudioEngine
 {
   // From https://github.com/filoe/cscore/blob/master/Samples/NVorbisIntegration/Program.cs
   public sealed class NVorbisSource : ISampleSource

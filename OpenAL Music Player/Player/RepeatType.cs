@@ -1,4 +1,4 @@
-﻿namespace OpenALMusicPlayer.AudioPlayer
+﻿namespace OpenALMusicPlayer.Player
 {
   internal enum RepeatType : byte
   {

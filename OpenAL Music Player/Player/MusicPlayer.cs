@@ -2,10 +2,10 @@
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenALMusicPlayer.AudioEngine;
-using OpenALMusicPlayer.GUI.Model;
+using Common.Model;
+using AudioEngine;
 
-namespace OpenALMusicPlayer.AudioPlayer
+namespace OpenALMusicPlayer.Player
 {
   class MusicPlayer : IDisposable
   {
@@ -14,7 +14,7 @@ namespace OpenALMusicPlayer.AudioPlayer
     private readonly ITrackNumber trackNumber;
     private readonly Func<double, double, CancellationToken, Task> trackPositionUpdateCallback;
 
-    private AudioEngine.AudioPlayer audioPlayer;
+    private AudioPlayer audioPlayer;
     private int currentMusic = 0;
     private double volumePercentage = 100;
     private double volume = 1;

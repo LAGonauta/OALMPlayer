@@ -1,21 +1,16 @@
-﻿using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
+﻿using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
+using AudioEngine.Helpers;
 using CSCore;
 using CSCore.Codecs;
 using CSCore.Streams.SampleConverter;
-using OpenALMusicPlayer.Helpers;
 using OpenTK.Audio.OpenAL;
 using OpenTK.Audio.OpenAL.Extensions.Creative.EnumerateAll;
 using OpenTK.Audio.OpenAL.Extensions.EXT.Float32;
 
-namespace OpenALMusicPlayer.AudioEngine
+namespace AudioEngine
 {
-  internal class AudioPlayer : IDisposable
+    public class AudioPlayer : IDisposable
   {
     private ALDevice device;
     private ALContext context;
@@ -30,7 +25,7 @@ namespace OpenALMusicPlayer.AudioEngine
 
     public bool IsValid => !disposedValue;
 
-    public AudioPlayer(string device = null)
+    public AudioPlayer(string? device = null)
     {
       if (device == null)
       {
@@ -38,7 +33,7 @@ namespace OpenALMusicPlayer.AudioEngine
       }
 
       this.device = ALC.OpenDevice(device);
-      context = ALC.CreateContext(this.device, (int[])null);
+      context = ALC.CreateContext(this.device, Array.Empty<int>());
       ALC.MakeContextCurrent(context);
       source = AL.GenSource();
       xram = new XRamExtension();
@@ -316,7 +311,7 @@ namespace OpenALMusicPlayer.AudioEngine
 
     private IWaveSource GetAudioFile(string filePath)
     {
-      IWaveSource audioFile = null;
+      IWaveSource? audioFile = null;
       try
       {
         audioFile = CodecFactory.Instance.GetCodec(filePath);

@@ -1,7 +1,7 @@
 ﻿using System.Threading;
 using System.Threading.Tasks;
 
-namespace OpenALMusicPlayer.Helpers
+namespace AudioEngine.Helpers
 {
   internal static class SemaphoreSlimHelper
   {

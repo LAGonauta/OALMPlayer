@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
@@ -12,17 +11,17 @@ using CSCore.Codecs;
 using System.Reflection;
 using System.Threading.Tasks;
 using System.Threading;
-using OpenALMusicPlayer.AudioPlayer;
 using System.Windows.Input;
 using System.Windows.Threading;
 using SharpHook;
 using SharpHook.Native;
-using OpenALMusicPlayer.AudioEngine;
 using System.ComponentModel;
 using OpenALMusicPlayer.GUI.Model;
 using OpenALMusicPlayer.GUI.ViewModel;
-using OpenALMusicPlayer.Helpers;
 using Ookii.Dialogs.Wpf;
+using OpenALMusicPlayer.Player;
+using AudioEngine;
+using Common.Helpers;
 
 // TODO:
 // Use INotifyPropertyChanged 

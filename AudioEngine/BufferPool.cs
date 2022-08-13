@@ -4,7 +4,7 @@ using System.Diagnostics;
 using System.Linq;
 using OpenTK.Audio.OpenAL;
 
-namespace OpenALMusicPlayer.AudioEngine
+namespace AudioEngine
 {
   internal class BufferPool : IDisposable
   {

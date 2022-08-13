@@ -3,7 +3,7 @@ using System.Buffers.Binary;
 using CSCore;
 using CSCore.Streams.SampleConverter;
 
-namespace OpenALMusicPlayer.Helpers
+namespace AudioEngine.Helpers
 {
   // From CSCore, but with stackalloc
   // Will be here until CSCore is updated

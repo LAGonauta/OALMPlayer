@@ -10,14 +10,14 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using OpenTK.Audio.OpenAL;
 
-namespace OpenALMusicPlayer.AudioEngine
+namespace AudioEngine
 {
   ///<summary>
   ///The X-Ram Extension is provided on the top-end Sound Blaster X-Fi solutions (Sound Blaster X-Fi Fatal1ty, Sound Blaster X-Fi Elite Pro, or later).
   ///These products feature 64MB of X-Ram that can only be used for audio purposes, which can be controlled by this Extension.
   ///</summary>
   //[CLSCompliant(true)]
-  public sealed class XRamExtension
+  internal sealed class XRamExtension
   {
     /// <summary>Returns True if the X-Ram Extension has been found and could be initialized.</summary>
     public bool IsInitialized { get; } = false;
@@ -31,12 +31,14 @@ namespace OpenALMusicPlayer.AudioEngine
     //typedef ALenum    (__cdecl *EAXGetBufferMode)(ALuint buffer, ALint *value);
 
     //[CLSCompliant(false)]
-    private Delegate_SetBufferMode Imported_SetBufferMode;
+    private readonly Delegate_SetBufferMode? Imported_SetBufferMode;
     //[CLSCompliant(false)]
-    private Delegate_GetBufferMode Imported_GetBufferMode;
-
-    private int AL_EAX_RAM_SIZE, AL_EAX_RAM_FREE,
-                AL_STORAGE_AUTOMATIC, AL_STORAGE_HARDWARE, AL_STORAGE_ACCESSIBLE;
+    private readonly Delegate_GetBufferMode? Imported_GetBufferMode;
+    private readonly int AL_EAX_RAM_SIZE;
+    private readonly int AL_EAX_RAM_FREE;
+    private readonly int AL_STORAGE_AUTOMATIC;
+    private readonly int AL_STORAGE_HARDWARE;
+    private readonly int AL_STORAGE_ACCESSIBLE;
 
     /// <summary>
     /// Constructs a new XRamExtension instance.
@@ -120,15 +122,17 @@ namespace OpenALMusicPlayer.AudioEngine
     //[CLSCompliant(false)]
     public bool SetBufferMode(int n, ref uint buffer, XRamStorage mode)
     {
-      switch (mode)
+      if (Imported_SetBufferMode == null)
       {
-        case XRamStorage.Accessible:
-          return Imported_SetBufferMode(n, ref buffer, AL_STORAGE_ACCESSIBLE);
-        case XRamStorage.Hardware:
-          return Imported_SetBufferMode(n, ref buffer, AL_STORAGE_HARDWARE);
-        default:
-          return Imported_SetBufferMode(n, ref buffer, AL_STORAGE_AUTOMATIC);
+        return false;
       }
+
+      return mode switch
+      {
+        XRamStorage.Accessible => Imported_SetBufferMode(n, ref buffer, AL_STORAGE_ACCESSIBLE),
+        XRamStorage.Hardware => Imported_SetBufferMode(n, ref buffer, AL_STORAGE_HARDWARE),
+        _ => Imported_SetBufferMode(n, ref buffer, AL_STORAGE_AUTOMATIC),
+      };
     }
 
     /// <summary>This function is used to set the storage Mode of an array of OpenAL Buffers.</summary>
@@ -149,6 +153,11 @@ namespace OpenALMusicPlayer.AudioEngine
     //[CLSCompliant(false)]
     public XRamStorage GetBufferMode(ref uint buffer)
     {
+      if (Imported_GetBufferMode == null)
+      {
+        return XRamStorage.Automatic;
+      }
+
       int tempresult = Imported_GetBufferMode(buffer, IntPtr.Zero); // IntPtr.Zero due to the parameter being unused/reserved atm
 
       if (tempresult == AL_STORAGE_ACCESSIBLE)
