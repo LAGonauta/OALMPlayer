@@ -1,8 +1,6 @@
-﻿using System.ComponentModel;
-
-namespace OpenALMusicPlayer.GUI.Model
+﻿namespace OpenALMusicPlayer.GUI.Model
 {
-  public class PlaylistItem : INotifyPropertyChanged
+  internal class PlaylistItem : BaseModel
   {
     private string filePath;
     private string number;
@@ -12,13 +10,6 @@ namespace OpenALMusicPlayer.GUI.Model
     private uint discNumber;
     private string fileName;
     private uint trackNumber;
-
-    public event PropertyChangedEventHandler PropertyChanged;
-
-    private void OnPropertyChanged(string propertyName)
-    {
-      PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-    }
 
     public string FilePath { get => filePath; set { filePath = value; OnPropertyChanged(nameof(FilePath)); } }
     public string Number { get => number; set { number = value; OnPropertyChanged(nameof(Number)); } }

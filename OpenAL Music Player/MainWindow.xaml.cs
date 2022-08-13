@@ -41,6 +41,7 @@ namespace OpenALMusicPlayer
     #region Variables
     // Generate playlist
     private readonly PlaylistItemViewModel playListItems = new();
+    private readonly TrackNumber trackNumber = new();
 
     // OpenAL controls
     private MusicPlayer musicPlayer;
@@ -74,6 +75,7 @@ namespace OpenALMusicPlayer
       };
 
       // Set GUI
+      currentMusicText.DataContext = trackNumber;
       playlist.ItemsSource = playListItems;
       playlist.Items.SortDescriptions.Add(new SortDescription("DiscNumber", ListSortDirection.Ascending));
       playlist.Items.SortDescriptions.Add(new SortDescription("Album", ListSortDirection.Ascending));
@@ -406,7 +408,7 @@ namespace OpenALMusicPlayer
       var oldState = musicPlayer?.Status ?? PlayerState.Stopped;
       musicPlayer?.Dispose();
 
-      musicPlayer = new MusicPlayer((string)DeviceChoice.SelectedValue, playListItems.Select(item => item.FilePath).ToList(), UpdateTrackNumber, UpdateTrackPosition);
+      musicPlayer = new MusicPlayer((string)DeviceChoice.SelectedValue, playListItems.Select(item => item.FilePath).ToList(), trackNumber, UpdateTrackPosition);
 
       // Load settings after changing player
       if (radioRepeatAll.IsChecked == true)
@@ -427,26 +429,6 @@ namespace OpenALMusicPlayer
       if (oldState == PlayerState.Playing)
       {
         await musicPlayer.Play(audio_position_slider.Value);
-      }
-    }
-    
-    private async Task UpdateTrackNumber(CancellationToken token)
-    {
-      try
-      {
-        await Dispatcher.InvokeAsync(() =>
-        {
-          var currentMusic = musicPlayer.CurrentMusicIndex.ToString();
-          var currentText = current_music_text_display.Text;
-          if (currentText != currentMusic)
-          {
-            current_music_text_display.Text = currentMusic;
-          }
-        }, DispatcherPriority.DataBind, token);
-      }
-      catch (TaskCanceledException)
-      {
-        Trace.WriteLine("Task cancelled updating track number");
       }
     }
 
@@ -486,11 +468,6 @@ namespace OpenALMusicPlayer
             if (audio_position_slider.Value != 0)
             {
               audio_position_slider.Value = 0;
-            }
-
-            if (current_music_text_display.Text != "-")
-            {
-              current_music_text_display.Text = "-";
             }
 
             if (position_text_display.Text != "0:00 / 0:00")

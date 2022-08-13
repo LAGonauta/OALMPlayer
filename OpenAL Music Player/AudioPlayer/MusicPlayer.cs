@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using OpenALMusicPlayer.AudioEngine;
+using OpenALMusicPlayer.GUI.Model;
 
 namespace OpenALMusicPlayer.AudioPlayer
 {
@@ -10,7 +11,7 @@ namespace OpenALMusicPlayer.AudioPlayer
   {
 
     #region Fields
-    private readonly Func<CancellationToken, Task> trackNumberUpdateCallback;
+    private readonly ITrackNumber trackNumber;
     private readonly Func<double, double, CancellationToken, Task> trackPositionUpdateCallback;
 
     private AudioEngine.AudioPlayer audioPlayer;
@@ -70,11 +71,11 @@ namespace OpenALMusicPlayer.AudioPlayer
     #endregion
 
     #region Constructor
-    public MusicPlayer(string device, List<string> filePaths, Func<CancellationToken, Task> trackNumberUpdateCallback, Func<double, double, CancellationToken, Task> trackPositionUpdateCallback)
+    public MusicPlayer(string device, List<string> filePaths, ITrackNumber trackNumber, Func<double, double, CancellationToken, Task> trackPositionUpdateCallback)
     {
       audioPlayer = new AudioEngine.AudioPlayer(device);
       MusicList = filePaths;
-      this.trackNumberUpdateCallback = trackNumberUpdateCallback;
+      this.trackNumber = trackNumber;
       this.trackPositionUpdateCallback = trackPositionUpdateCallback;
     }
     #endregion
@@ -99,7 +100,7 @@ namespace OpenALMusicPlayer.AudioPlayer
         {
           return;
         }
-        await trackNumberUpdateCallback(CancellationToken.None).ConfigureAwait(false);
+        trackNumber.Set(CurrentMusicIndex);
         var result = await player.Play(
           MusicList[currentMusic],
           async (current, total, token) =>
@@ -113,6 +114,10 @@ namespace OpenALMusicPlayer.AudioPlayer
         {
           NextTrack(true);
           position = 0;
+          if (Status == PlayerState.Stopped)
+          {
+            trackNumber.Set(0);
+          }
         }
         else if (result == PlaybackResult.Stopped)
         {

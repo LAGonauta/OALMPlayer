@@ -130,7 +130,10 @@
                                 <GroupBox.BorderBrush>
                                     <SolidColorBrush Color="{DynamicResource {x:Static SystemColors.ActiveBorderColorKey}}"/>
                                 </GroupBox.BorderBrush>
-                                <TextBlock x:Name="current_music_text_display" Text="-" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center"/>
+                                <TextBlock
+                                    xmlns:model="clr-namespace:OpenALMusicPlayer.GUI.Model" d:DataContext="{d:DesignInstance Type=model:TrackNumber}"
+                                    x:Name="currentMusicText"
+                                    Text="{Binding Value}" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center"/>
                             </GroupBox>
 
                             <GroupBox Header="X-RAM" Grid.Column="1" Grid.Row="1">
