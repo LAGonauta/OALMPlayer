@@ -3,18 +3,21 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:OpenALMusicPlayer"
+        xmlns:tb="clr-namespace:H.NotifyIcon;assembly=H.NotifyIcon.Wpf"
         mc:Ignorable="d"
         Title="OpenAL Music Player" MinHeight="480" MinWidth="640" Height="600" Width="800"
         Loaded="Window_Loaded"
         Closing="Window_Closing">
-
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
+        <tb:TaskbarIcon
+            x:Name="windowNotifyIcon"
+            ToolTipText="OpenAL Music Player"
+        />
         <Menu Grid.Row="0">
             <MenuItem Header="_File " >
                 <MenuItem Header="_Open folder..." Click="Open_Click"/>
@@ -74,7 +77,7 @@
                     <Border.BorderBrush>
                         <SolidColorBrush Color="{DynamicResource {x:Static SystemColors.ActiveBorderColorKey}}"/>
                     </Border.BorderBrush>
-                    <ListView x:Name="playlistItems" VerticalContentAlignment="Stretch">
+                    <ListView x:Name="playlist" VerticalContentAlignment="Stretch">
                         <ListView.View>
                             <GridView>
                                 <GridViewColumn Header="#" Width="25" DisplayMemberBinding="{Binding Number}" />
@@ -114,7 +117,7 @@
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <Slider x:Name="audio_position_slider" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center" VerticalAlignment="Center" Grid.Column="0" Maximum="1" TickFrequency="0.1" LargeChange="0.1" SmallChange="0.01"/>
+                            <Slider x:Name="audio_position_slider" GotMouseCapture="Slider_PositionDrag"  LostMouseCapture="Slider_PositionDrag" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Center" VerticalAlignment="Center" Grid.Column="0" Maximum="1" TickFrequency="0.1" LargeChange="0.1" SmallChange="0.01"/>
                             <TextBlock x:Name="position_text_display" Text="0:00 / 0:00" HorizontalAlignment="Right" VerticalAlignment="Center" Grid.Column="1"></TextBlock>
                         </Grid>
 
@@ -127,7 +130,10 @@
                                 <GroupBox.BorderBrush>
                                     <SolidColorBrush Color="{DynamicResource {x:Static SystemColors.ActiveBorderColorKey}}"/>
                                 </GroupBox.BorderBrush>
-                                <TextBlock x:Name="current_music_text_display" Text="-" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center"/>
+                                <TextBlock
+                                    xmlns:model="clr-namespace:OpenALMusicPlayer.GUI.Model" d:DataContext="{d:DesignInstance Type=model:TrackNumber}"
+                                    x:Name="currentMusicText"
+                                    Text="{Binding Value}" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center"/>
                             </GroupBox>
 
                             <GroupBox Header="X-RAM" Grid.Column="1" Grid.Row="1">
@@ -188,13 +194,6 @@
 
                             </StackPanel>
                         </GroupBox>
-
-                        <GroupBox Header="Thread update rate (ms)">
-                            <GroupBox.BorderBrush>
-                                <SolidColorBrush Color="{DynamicResource {x:Static SystemColors.ActiveBorderColorKey}}"/>
-                            </GroupBox.BorderBrush>
-                            <Slider x:Name="thread_rate_slider" AutoToolTipPlacement="BottomRight" Maximum="1000" Value="150" Minimum="25" SmallChange="1" ToolTip="Default = 150 ms" LargeChange="100" ValueChanged="ThreadTimeSlider_ValueChanged" TickPlacement="BottomRight" TickFrequency="195"/>
-                        </GroupBox>
                     </StackPanel>
                     <Grid Grid.Column="1" Grid.Row="0" Grid.RowSpan="2" Width="1" Margin="5,0">
                         <Grid.Background>
@@ -211,7 +210,7 @@
                             </Separator.Background>
                         </Separator>
                         <TextBlock Text="Speed (%)" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        <Slider x:Name="speed_slider" Orientation="Vertical" HorizontalAlignment="Center" VerticalAlignment="Center" Height="99" Maximum="2" Value="1" ValueChanged="Slider_SpeedChanged" Minimum="0.0001" SmallChange="0.01" LargeChange="0.10" TickFrequency="0.50" TickPlacement="TopLeft"/>
+                        <Slider x:Name="speed_slider" Orientation="Vertical" HorizontalAlignment="Center" VerticalAlignment="Center" Height="99" Maximum="2" Value="1" ValueChanged="Slider_PitchChanged" Minimum="0.0001" SmallChange="0.01" LargeChange="0.10" TickFrequency="0.50" TickPlacement="TopLeft"/>
                         <TextBlock x:Name="speed_text_display" Text="100%" HorizontalAlignment="Center"/>
                     </StackPanel>
                 </Grid>

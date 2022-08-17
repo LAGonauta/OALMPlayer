@@ -1,21 +1,16 @@
-﻿using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
+﻿using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
+using AudioEngine.Helpers;
 using CSCore;
 using CSCore.Codecs;
 using CSCore.Streams.SampleConverter;
-using OpenALMusicPlayer.Helpers;
 using OpenTK.Audio.OpenAL;
 using OpenTK.Audio.OpenAL.Extensions.Creative.EnumerateAll;
 using OpenTK.Audio.OpenAL.Extensions.EXT.Float32;
 
-namespace OpenALMusicPlayer.AudioEngine
+namespace AudioEngine
 {
-  internal class AudioPlayer : IDisposable
+    public class AudioPlayer : IDisposable
   {
     private ALDevice device;
     private ALContext context;
@@ -30,7 +25,7 @@ namespace OpenALMusicPlayer.AudioEngine
 
     public bool IsValid => !disposedValue;
 
-    public AudioPlayer(string device = null)
+    public AudioPlayer(string? device = null)
     {
       if (device == null)
       {
@@ -38,7 +33,7 @@ namespace OpenALMusicPlayer.AudioEngine
       }
 
       this.device = ALC.OpenDevice(device);
-      context = ALC.CreateContext(this.device, (int[])null);
+      context = ALC.CreateContext(this.device, Array.Empty<int>());
       ALC.MakeContextCurrent(context);
       source = AL.GenSource();
       xram = new XRamExtension();
@@ -55,16 +50,10 @@ namespace OpenALMusicPlayer.AudioEngine
           return EnumerateAll.GetStringList(GetEnumerateAllContextStringList.AllDevicesSpecifier);
         }
         return ALC.GetStringList(GetEnumerationStringList.DeviceSpecifier);
-      });
+      }).ConfigureAwait(false);
     }
 
-    public ALSourceState State
-    {
-      get
-      {
-        return AL.GetSourceState(source);
-      }
-    }
+    public ALSourceState State => AL.GetSourceState(source);
 
     public void Stop()
     {
@@ -94,31 +83,32 @@ namespace OpenALMusicPlayer.AudioEngine
         AL.GetSource(source, ALSourceb.Looping, out bool looping);
         return looping;
       }
-      set
-      {
-        AL.Source(source, ALSourceb.Looping, value);
-      }
+      set => AL.Source(source, ALSourceb.Looping, value);
     }
 
-    public async Task Play(string filePath, Action<double, double> timeUpdateCallback)
+    public async Task<PlaybackResult> Play(string filePath, Func<double, double, CancellationToken, Task> timeUpdateCallback, double position)
     {
+      Stop();
+      using var playReleaseToken = await playSemaphore.LockAsync().ConfigureAwait(false);
       using var tokenSource = NewCancellationToken();
-      await Task.Run(async () =>
+      var localToken = tokenSource.Token;
+      var result = await Task.Run(async () =>
       {
-        var localToken = tokenSource.Token;
-        using var playReleaseToken = await playSemaphore.LockAsync();
         using var audioFile = GetAudioFile(filePath);
-        var totalTime = audioFile.GetLength().TotalMilliseconds / 1000.0;
+        var audioFileLength = audioFile.GetLength();
+        var totalTime = audioFileLength.TotalMilliseconds / 1000.0;
+        audioFile.SetPosition(audioFileLength * position);
 
-        const int streamingBufferTime = 1000; // in milliseconds
+        var streamingBufferTime = TimeSpan.FromMilliseconds(1000);
         var streamingBufferSize = (int)audioFile.GetRawElements(streamingBufferTime);
 
         var streamingBufferQueueSize = 5; // get from gui
         if (IsXFi)
         {
-          if (streamingBufferQueueSize > GetFreeXRam / streamingBufferSize)
+          var capacity = GetFreeXRam / streamingBufferSize;
+          if (streamingBufferQueueSize > capacity)
           {
-            streamingBufferQueueSize = GetFreeXRam / streamingBufferSize;
+            streamingBufferQueueSize = capacity;
           }
         }
 
@@ -127,8 +117,8 @@ namespace OpenALMusicPlayer.AudioEngine
           streamingBufferQueueSize = 3;
         }
 
-        var interval = TimeSpan.FromMilliseconds(200);
-        var currentTime = 0.0;
+        var currentTime = audioFile.GetPosition().TotalMilliseconds / 1000;
+        var interval = streamingBufferTime / 4;
         var soundData = new byte[streamingBufferSize];
         var initialized = false;
         using var bufferPool = new BufferPool(hasXram);
@@ -137,19 +127,19 @@ namespace OpenALMusicPlayer.AudioEngine
           if (localToken.IsCancellationRequested)
           {
             FinishUp(bufferPool);
-            return;
+            return PlaybackResult.Stopped;
           }
 
           var state = AL.GetSourceState(source);
           if (state == ALSourceState.Stopped || (state == ALSourceState.Initial && initialized == true))
           {
             FinishUp(bufferPool);
-            return;
+            return PlaybackResult.Finished;
           }
 
           if (state == ALSourceState.Paused)
           {
-            await SafeDelay(interval, localToken);
+            await SafeDelay(interval, localToken).ConfigureAwait(false);
             continue;
           }
 
@@ -176,31 +166,50 @@ namespace OpenALMusicPlayer.AudioEngine
             initialized = true;
           }
 
+          if (currentTime >= totalTime)
+          {
+            FinishUp(bufferPool);
+            return PlaybackResult.Finished;
+          }
+
           var offset = 0.0f;
           if (supportsOffset)
           {
             AL.GetSource(source, ALSourcef.SecOffset, out offset);
+            CheckALError("checking offset");
           }
 
-          timeUpdateCallback(currentTime + offset, totalTime);
-
-          if (currentTime >= totalTime)
+          try
           {
-            FinishUp(bufferPool);
-            return;
+            await timeUpdateCallback(currentTime + offset, totalTime, localToken).ConfigureAwait(false);
+          }
+          catch (TaskCanceledException)
+          {
+            Trace.WriteLine($"Unable to update time while playing");
           }
 
-          await SafeDelay(interval, localToken);
+          await SafeDelay(interval, localToken).ConfigureAwait(false);
         }
-      });
+      }).ConfigureAwait(false);
+
+      try
+      {
+        await timeUpdateCallback(0, 0, localToken).ConfigureAwait(false);
+      }
+      catch (TaskCanceledException)
+      {
+        Trace.WriteLine($"Unable to update time while stopped");
+      }
+
       tokenSource.Cancel();
+      return result;
     }
 
     private async Task SafeDelay(TimeSpan interval, CancellationToken token)
     {
       try
       {
-        await Task.Delay(interval, token);
+        await Task.Delay(interval, token).ConfigureAwait(false);
       }
       catch (TaskCanceledException e)
       {
@@ -223,7 +232,7 @@ namespace OpenALMusicPlayer.AudioEngine
 
     private CancellationTokenSource NewCancellationToken()
     {
-      var cancellationTokenSource = new CancellationTokenSource(); ;
+      var cancellationTokenSource = new CancellationTokenSource();
       concurrentBag.Enqueue(cancellationTokenSource);
       return cancellationTokenSource;
     }
@@ -302,7 +311,7 @@ namespace OpenALMusicPlayer.AudioEngine
 
     private IWaveSource GetAudioFile(string filePath)
     {
-      IWaveSource audioFile = null;
+      IWaveSource? audioFile = null;
       try
       {
         audioFile = CodecFactory.Instance.GetCodec(filePath);
@@ -479,10 +488,9 @@ namespace OpenALMusicPlayer.AudioEngine
       if (!disposedValue)
       {
         Stop();
-        playSemaphore.Wait();
-
         if (disposing)
         {
+          playSemaphore.Wait();
           playSemaphore.Dispose();
         }
 

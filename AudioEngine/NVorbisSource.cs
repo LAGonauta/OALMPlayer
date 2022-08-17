@@ -4,7 +4,7 @@ using System.IO;
 using CSCore;
 using NVorbis;
 
-namespace OpenALMusicPlayer
+namespace AudioEngine
 {
   // From https://github.com/filoe/cscore/blob/master/Samples/NVorbisIntegration/Program.cs
   public sealed class NVorbisSource : ISampleSource
@@ -26,21 +26,12 @@ namespace OpenALMusicPlayer
       _waveFormat = new WaveFormat(_vorbisReader.SampleRate, 32, _vorbisReader.Channels, AudioEncoding.IeeeFloat);
     }
 
-    public bool CanSeek
-    {
-      get { return _stream.CanSeek; }
-    }
+    public bool CanSeek => _stream.CanSeek;
 
-    public WaveFormat WaveFormat
-    {
-      get { return _waveFormat; }
-    }
+    public WaveFormat WaveFormat => _waveFormat;
 
     //got fixed through workitem #17, thanks for reporting @rgodart.
-    public long Length
-    {
-      get { return CanSeek ? (long)(_vorbisReader.TotalTime.TotalSeconds * _waveFormat.SampleRate * _waveFormat.Channels) : 0; }
-    }
+    public long Length => CanSeek ? (long)(_vorbisReader.TotalTime.TotalSeconds * _waveFormat.SampleRate * _waveFormat.Channels) : 0;
 
     //got fixed through workitem #17, thanks for reporting @rgodart.
     public long Position

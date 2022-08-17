@@ -1,10 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
-using System.Windows.Forms;
 using System.Windows.Controls;
 using System.Linq;
 
@@ -12,11 +10,20 @@ using CSCore;
 using CSCore.Codecs;
 using System.Reflection;
 using System.Threading.Tasks;
-using OpenALMusicPlayer.AudioPlayer;
+using System.Threading;
+using System.Windows.Input;
+using System.Windows.Threading;
+using SharpHook;
+using SharpHook.Native;
+using System.ComponentModel;
+using OpenALMusicPlayer.GUI.Model;
+using OpenALMusicPlayer.GUI.ViewModel;
+using Ookii.Dialogs.Wpf;
+using OpenALMusicPlayer.Player;
+using AudioEngine;
+using Common.Helpers;
 
 // TODO:
-// Make it OO
-// Use state machine
 // Use INotifyPropertyChanged 
 
 namespace OpenALMusicPlayer
@@ -31,54 +38,51 @@ namespace OpenALMusicPlayer
     #endregion Fields
 
     #region Variables
-    // Files in the directory
-    static List<string> filePaths = new List<string>();
-
     // Generate playlist
-    public ObservableCollection<PlaylistItemsList> items = new ObservableCollection<PlaylistItemsList>();
-
-    // Multithreaded delegated callback, so our gui is not stuck while playing sound
-    public delegate void UpdateDeviceListCallBack();
+    private readonly PlaylistItemViewModel playListItems = new();
+    private readonly TrackNumber trackNumber = new();
 
     // OpenAL controls
-    private MusicPlayer player;
+    private MusicPlayer musicPlayer;
 
     // CPU usage
-    PerformanceCounter theCPUCounter = new PerformanceCounter("Process", "% Processor Time", Process.GetCurrentProcess().ProcessName);
-    int CPU_logic_processors = Environment.ProcessorCount;
-    float total_cpu_usage;
+    private readonly PerformanceCounter theCPUCounter = new PerformanceCounter("Process", "% Processor Time", Process.GetCurrentProcess().ProcessName);
 
     // Info text
-    System.Windows.Forms.Timer InfoText;
+    private readonly Timer infoTextTimer;
+    private readonly Timer cpuTimer;
 
-    NotifyIcon ni;
+    private IGlobalHook globalHook;
+
+    private bool positionMoving = false;
+
+    private System.Drawing.Icon icon;
 
     #endregion
     public MainWindow()
     {
       InitializeComponent();
 
-      var icon = System.Drawing.Icon.ExtractAssociatedIcon(Assembly.GetEntryAssembly().ManifestModule.Name);
+      icon = System.Drawing.Icon.ExtractAssociatedIcon(Assembly.GetEntryAssembly().ManifestModule.Name);
 
-      ni = new NotifyIcon()
-      {
-        Visible = true,
-        Text = Title,
-        Icon = icon
-      };
-
-      ni.DoubleClick += (sender, e) =>
+      windowNotifyIcon.Icon = icon;
+      windowNotifyIcon.TrayMouseDoubleClick += (sender, e) =>
       {
         this.Show();
+        this.Activate();
         this.WindowState = WindowState.Normal;
       };
 
       // Set GUI
-      playlistItems.ItemsSource = items;
+      currentMusicText.DataContext = trackNumber;
+      playlist.ItemsSource = playListItems;
+      playlist.Items.SortDescriptions.Add(new SortDescription("DiscNumber", ListSortDirection.Ascending));
+      playlist.Items.SortDescriptions.Add(new SortDescription("Album", ListSortDirection.Ascending));
+      playlist.Items.SortDescriptions.Add(new SortDescription("TrackNumber", ListSortDirection.Ascending));
+      playlist.Items.SortDescriptions.Add(new SortDescription("FileName", ListSortDirection.Ascending));
 
       speed_slider.Value = Properties.Settings.Default.Speed;
       volume_slider.Value = Properties.Settings.Default.Volume;
-      thread_rate_slider.Value = Properties.Settings.Default.UpdateRate;
       switch ((RepeatType)Properties.Settings.Default.Repeat)
       {
         case RepeatType.All:
@@ -96,19 +100,10 @@ namespace OpenALMusicPlayer
       CodecFactory.Instance.Register("ogg-vorbis", new CodecFactoryEntry(s => new NVorbisSource(s).ToWaveSource(), ".ogg"));
 
       // Starting CPU usage timer
-      total_cpu_usage = theCPUCounter.NextValue();
-      this.UpdateCPUUsage(null, null);
-      var CPUTimer = new Timer();
-      CPUTimer.Interval = 2000;
-      CPUTimer.Tick += new EventHandler(this.UpdateCPUUsage);
-      CPUTimer.Start();
+      cpuTimer = new Timer(async (state) => await Dispatcher.InvokeAsync(UpdateCPUUsage), null, TimeSpan.Zero, TimeSpan.FromMilliseconds(2000));
 
       // Starting GUI information update timer
-      this.UpdateCPUUsage(null, null);
-      InfoText = new Timer();
-      InfoText.Interval = 150;
-      InfoText.Tick += new EventHandler(this.UpdateInfoText);
-      InfoText.Start();
+      infoTextTimer = new Timer(async (state) => await Dispatcher.InvokeAsync(UpdateInfoText), null, TimeSpan.Zero, TimeSpan.FromMilliseconds(1000));
     }
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
@@ -117,138 +112,169 @@ namespace OpenALMusicPlayer
       UpdateDeviceList(devices);
       if (Properties.Settings.Default.LastPlaylist != null)
       {
-        filePaths = new List<string>();
-        foreach (var path in Properties.Settings.Default.LastPlaylist)
-        {
-          if (File.Exists(path))
-          {
-            filePaths.Add(path);
-          }
-        }
-        await GeneratePlaylist(filePaths);
+        await GeneratePlaylist(Properties.Settings.Default.LastPlaylist.Cast<string>().ToList());
       }
+
+      globalHook = new TaskPoolGlobalHook();
+      globalHook.KeyPressed += async (s, e) =>
+      {
+        Func<Task> action = e.Data.KeyCode switch {
+          KeyCode.VcMediaPlay => async () => await Play_Click_Async(s, null),
+          KeyCode.VcMediaStop => () => { Stop_Click(s, null); return Task.CompletedTask; },
+          KeyCode.VcMediaPrevious => async () => await Back_Click_Async(s, null),
+          KeyCode.VcMediaNext => async () => await Next_Click_Async(s, null),
+          _ => null
+        };
+        if (action != null)
+        {
+          await Dispatcher.InvokeAsync(async () => await action());
+        }
+      };
+
+      await globalHook.RunAsync().ConfigureAwait(false);
     }
 
     public async Task GeneratePlaylist(List<string> filePaths)
     {
-      items.Clear();
-      var playlistItems = await Task.Run(() =>
-      {
-        return filePaths
-          .Select((path, index) =>
-          {
-            try
-            {
-              var file = TagLib.File.Create(path);
-              return new PlaylistItemsList()
-              {
-                Number = (index + 1).ToString(),
-                Title = file.Tag.Title,
-                Performer = file.Tag.FirstPerformer,
-                Album = file.Tag.Album,
-                FileName = Path.GetFileName(path)
-              };
-            }
-            catch (TagLib.UnsupportedFormatException ex)
-            {
-              Trace.WriteLine($"Format not supported: {ex.Message}");
-              return new PlaylistItemsList()
-              {
-                Number = (index + 1).ToString(),
-                FileName = Path.GetFileName(path)
-              };
-            }
-          })
-          .ToList();
-      });
+      playlist.IsHitTestVisible = false;
+      playListItems.Clear();
+      var processedItems = await Task.Run(
+        filePaths
+        .AsParallel()
+        .Where(File.Exists)
+        .Select(filePath =>
+        {
+          var item = LoadFileTags(filePath);
+          Dispatcher.InvokeAsync(() => playListItems.Add(item));
+          return item;
+        })
+        .OrderBy(item => item.DiscNumber)
+        .ThenBy(item => item.Album)
+        .ThenBy(item => item.TrackNumber)
+        .ThenBy(item => item.FileName)
+        .Peek((item, index) => item.Number = (index + 1).ToString())
+        .ToList);
+      playlist.IsHitTestVisible = true;
 
-      playlistItems
-          .ForEach(item => items.Add(item));
-
-      if (player != null)
+      if (musicPlayer != null)
       {
-        player.MusicList = filePaths; 
+        musicPlayer.MusicList = processedItems.Select(item => item.FilePath).ToList();
+      }
+    }
+
+    private PlaylistItem LoadFileTags(string filePath)
+    {
+      try
+      {
+        var file = TagLib.File.Create(filePath);
+        return new PlaylistItem()
+        {
+          FilePath = filePath,
+          Title = file.Tag.Title,
+          Performer = file.Tag.FirstPerformer,
+          Album = file.Tag.Album,
+          DiscNumber = file.Tag.Disc,
+          FileName = Path.GetFileName(filePath),
+          TrackNumber = file.Tag.Track
+        };
+      }
+      catch (TagLib.UnsupportedFormatException ex)
+      {
+        Trace.WriteLine($"Format not supported: {ex.Message}");
+        return new PlaylistItem()
+        {
+          FilePath = filePath,
+          FileName = Path.GetFileName(filePath)
+        };
       }
     }
 
     #region GUI stuff
     private async void Open_Click(object sender, RoutedEventArgs e)
     {
-      using (var dlgOpen = new FolderBrowserDialog())
+      var dialog = new VistaFolderBrowserDialog
       {
-        dlgOpen.Description = "Escolha a pasta para tocar";
+        Description = "Escolha a pasta para tocar",
+        UseDescriptionForTitle = true
+      };
 
-        var result = dlgOpen.ShowDialog();
-
-        if (result == System.Windows.Forms.DialogResult.OK)
-        {
-          var allowedExtensions = CodecFactory.Instance.GetSupportedFileExtensions();
-          filePaths = Directory.GetFiles(dlgOpen.SelectedPath)
-            .Where(file => allowedExtensions.Any(file.ToLowerInvariant().EndsWith))
-            .ToList();
-          await GeneratePlaylist(filePaths);
-        }
+      var result = dialog.ShowDialog(this) ?? false;
+      if (result)
+      {
+        var allowedExtensions = CodecFactory.Instance.GetSupportedFileExtensions();
+        var filePaths = Directory.GetFiles(dialog.SelectedPath)
+          .Where(file => allowedExtensions.Any(file.ToLowerInvariant().EndsWith))
+          .ToList();
+        await GeneratePlaylist(filePaths);
       }
     }
 
     private async void Play_Click(object sender, RoutedEventArgs e)
     {
-      if (filePaths != null)
+      await Play_Click_Async(sender, e);
+    }
+
+    private async Task Play_Click_Async(object sender, RoutedEventArgs e)
+    {
+      if (playlist != null && playlist.Items.Count > 0)
       {
-        if (filePaths.Count > 0)
+        playlist.SelectedIndex = musicPlayer.CurrentMusicIndex - 1;
+        if (musicPlayer.Status == PlayerState.Paused)
         {
-          playlistItems.SelectedIndex = player.CurrentMusic - 1;
-          if (player.Status == PlayerState.Paused)
+          musicPlayer.Unpause();
+          SoundPlayPause.Content = "Pause";
+        }
+        else
+        {
+          if (musicPlayer.Status == PlayerState.Playing)
           {
-            player.Unpause();
-            SoundPlayPause.Content = "Pause";
+            SoundPlayPause.Content = "Play";
+            musicPlayer.Pause();
           }
           else
           {
-            if (player.Status == PlayerState.Playing)
-            {
-              SoundPlayPause.Content = "Play";
-              player.Pause();
-            }
-            else
-            {
-              SoundPlayPause.Content = "Pause";
-              await player.Play();
-            }
+            SoundPlayPause.Content = "Pause";
+            await musicPlayer.Play(0);
           }
         }
       }
     }
 
-    private void Next_Click(object sender, RoutedEventArgs e)
+    private async void Next_Click(object sender, RoutedEventArgs e)
     {
-      if (filePaths != null)
+      await Next_Click_Async(sender, e);
+    }
+
+    private async Task Next_Click_Async(object sender, RoutedEventArgs e)
+    {
+      if (playlist != null && playlist.Items.Count > 0)
       {
-        if (filePaths.Count > 0)
-        {
-          SoundPlayPause.Content = "Pause";
-          player.NextTrack();
-          playlistItems.SelectedIndex = player.CurrentMusic - 1;
-        }
+        SoundPlayPause.Content = "Pause";
+        musicPlayer.NextTrack(false);
+        playlist.SelectedIndex = musicPlayer.CurrentMusicIndex - 1;
+        await musicPlayer.Play(0);
       }
     }
 
     private void Stop_Click(object sender, RoutedEventArgs e)
     {
       SoundPlayPause.Content = "Play";
-      player.Stop();
+      musicPlayer.Stop();
     }
 
-    private void Back_Click(object sender, RoutedEventArgs e)
+    private async void Back_Click(object sender, RoutedEventArgs e)
     {
-      if (filePaths != null)
+      await Back_Click_Async(sender, e);
+    }
+
+    private async Task Back_Click_Async(object sender, RoutedEventArgs e)
+    {
+      if (playlist != null && playlist.Items.Count > 0)
       {
-        if (filePaths.Count > 0)
-        {
-          SoundPlayPause.Content = "Pause";
-          player.PreviousTrack();
-          playlistItems.SelectedIndex = player.CurrentMusic - 1;
-        }
+        SoundPlayPause.Content = "Pause";
+        musicPlayer.PreviousTrack();
+        playlist.SelectedIndex = musicPlayer.CurrentMusicIndex - 1;
+        await musicPlayer.Play(0);
       }
     }
 
@@ -258,113 +284,83 @@ namespace OpenALMusicPlayer
       about_window.ShowDialog();
     }
 
-    private void PlaylistItem_MouseDoubleClick(object sender, RoutedEventArgs e)
+    private async void PlaylistItem_MouseDoubleClick(object sender, RoutedEventArgs e)
     {
-      if (playlistItems.SelectedIndex != -1)
+      if (playlist.SelectedIndex != -1)
       {
         SoundPlayPause.Content = "Pause";
-        // is SelectedIndex zero indexed? Yes.
-        var status = player.Status;
-        player.CurrentMusic = playlistItems.SelectedIndex + 1;
-        if (status == PlayerState.Stopped)
-        {
-          Play_Click(sender, e);
-        }
+        // SelectedIndex is zero indexed
+        musicPlayer.CurrentMusicIndex = playlist.SelectedIndex + 1;
+        await musicPlayer.Play(0);
       }
     }
 
     private void Slider_VolumeChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
-      if (player != null)
+      if (musicPlayer != null)
       {
-        player.Volume = (float)e.NewValue;
+        musicPlayer.Volume = (float)e.NewValue;
       }
 
       if (volume_text_display != null)
       {
-        volume_text_display.Text = e.NewValue.ToString("0") + "%";
+        volume_text_display.Text = $"{e.NewValue:0}%";
       }      
     }
 
-    public void Slider_SpeedChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    private async void Slider_PositionDrag(object sender, MouseEventArgs e)
     {
-      if (player != null)
+      if (e.LeftButton == MouseButtonState.Pressed)
       {
-        player.Pitch = (float)e.NewValue;
+        positionMoving = true;
       }
-
-      if (speed_text_display != null)
+      else
       {
-        speed_text_display.Text = (e.NewValue * 100).ToString("0") + "%";
-      }
-    }
-
-    private void UpdateCPUUsage(object source, EventArgs e)
-    {
-      total_cpu_usage = theCPUCounter.NextValue();
-      CPUUsagePercent.Text = (total_cpu_usage / CPU_logic_processors).ToString("0.0") + "%";
-    }
-
-    private void UpdateInfoText(object source, EventArgs e)
-    {
-      // Updating the values only when they change. Is this faster or slower than just updating them?
-      if (player != null)
-      {
-        TimeSpan current_time = TimeSpan.FromSeconds(player.TrackCurrentTime);
-        TimeSpan total_time = TimeSpan.FromSeconds(player.TrackTotalTime);
-
-        if (player.Status != PlayerState.Stopped)
+        if (sender is Slider slider)
         {
-          if (player.TrackTotalTime > 0)
+          var position = slider.Value;
+          positionMoving = false;
+          if (musicPlayer.Status == PlayerState.Playing)
           {
-            if (audio_position_slider.Value != player.TrackCurrentTime / player.TrackTotalTime)
-            {
-              audio_position_slider.Value = player.TrackCurrentTime / player.TrackTotalTime;
-            }
-          }
-
-          if (current_music_text_display.Text != player.CurrentMusic.ToString())
-          {
-            current_music_text_display.Text = player.CurrentMusic.ToString();
-          }
-
-          var pos_text = $"{(int)current_time.TotalMinutes}:{current_time.Seconds:00} / {(int)total_time.TotalMinutes}:{total_time.Seconds:00}";
-          if (position_text_display.Text != pos_text)
-          {
-            position_text_display.Text = pos_text;
-          }
-
-          if (playlistItems.SelectedIndex != player.CurrentMusic - 1)
-          {
-            if (!playlistItems.IsMouseOver)
-            {
-              playlistItems.SelectedIndex = player.CurrentMusic - 1;
-            } 
+            await musicPlayer.Play(position);
           }
         }
         else
         {
-          if (audio_position_slider.Value != 0)
-          {
-            audio_position_slider.Value = 0;
-          }
-          
-          if (current_music_text_display.Text != "-")
-          {
-            current_music_text_display.Text = "-";
-          }
-          
-          if (position_text_display.Text != "0:00 / 0:00")
-          {
-            position_text_display.Text = "0:00 / 0:00";
-          }
+          positionMoving = false;
         }
+      }
+    }
 
-        if (player.XRamTotal > 0)
+    public void Slider_PitchChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+      if (musicPlayer != null)
+      {
+        musicPlayer.Pitch = (float)e.NewValue;
+      }
+
+      if (speed_text_display != null)
+      {
+        speed_text_display.Text = $"{e.NewValue * 100:0}%";
+      }
+    }
+
+    private void UpdateCPUUsage()
+    {
+      CPUUsagePercent.Text = $"{theCPUCounter.NextValue() / Environment.ProcessorCount:0.0}%";
+    }
+
+    private void UpdateInfoText()
+    {
+      // Updating the values only when they change. Is this faster or slower than just updating them?
+      if (musicPlayer != null)
+      {
+        if (musicPlayer.XRamTotal > 0)
         {
-          if (xram_text_display.Text != (player.XRamFree / (1024.0 * 1024)).ToString("0.00") + "MB")
+          var val = $"{musicPlayer.XRamFree / (1024.0 * 1024):0.00}MB";
+          if (xram_text_display.Text != val)
           {
-            xram_text_display.Text = (player.XRamFree / (1024.0 * 1024)).ToString("0.00") + "MB"; 
+            xram_text_display.Text = val;
           }
         }
         else
@@ -405,87 +401,141 @@ namespace OpenALMusicPlayer
       }
     }
 
-    private void DeviceChoice_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private async void DeviceChoice_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-      if (player != null)
-      {
-        player.Dispose();
-      }
-      player = new MusicPlayer(filePaths, (string)DeviceChoice.SelectedValue);
+      var oldMusicIndex = musicPlayer?.CurrentMusicIndex ?? 1;
+      var oldState = musicPlayer?.Status ?? PlayerState.Stopped;
+      musicPlayer?.Dispose();
+
+      musicPlayer = new MusicPlayer((string)DeviceChoice.SelectedValue, playListItems.Select(item => item.FilePath).ToList(), trackNumber, UpdateTrackPosition);
 
       // Load settings after changing player
       if (radioRepeatAll.IsChecked == true)
       {
-        player.RepeatSetting = RepeatType.All;
+        musicPlayer.RepeatSetting = RepeatType.All;
       }
       else if (radioRepeatSong.IsChecked == true)
       {
-        player.RepeatSetting = RepeatType.Song;
+        musicPlayer.RepeatSetting = RepeatType.Song;
       }
       else if (radioRepeatNone.IsChecked == true)
       {
-        player.RepeatSetting = RepeatType.No;
+        musicPlayer.RepeatSetting = RepeatType.No;
       }
+      musicPlayer.Volume = (float)volume_slider.Value;
+      musicPlayer.Pitch = (float)speed_slider.Value;
+      musicPlayer.CurrentMusicIndex = oldMusicIndex;
+      if (oldState == PlayerState.Playing)
+      {
+        await musicPlayer.Play(audio_position_slider.Value);
+      }
+    }
 
-      player.Volume = (float)volume_slider.Value;
-      player.Pitch = (float)speed_slider.Value;
-      //player.UpdateRate = (uint)thread_rate_slider.Value; TODO: remove this slider
-      player.MusicList = filePaths;
+    private async Task UpdateTrackPosition(double currentTime, double totalTime, CancellationToken token)
+    {
+      try
+      {
+        await Dispatcher.InvokeAsync(() =>
+        {
+          var ct = TimeSpan.FromSeconds(currentTime);
+          var tt = TimeSpan.FromSeconds(totalTime);
+
+          if (musicPlayer.Status != PlayerState.Stopped)
+          {
+            if (!positionMoving && musicPlayer.TrackTotalTime > 0)
+            {
+              var ratio = musicPlayer.TrackCurrentTime / musicPlayer.TrackTotalTime;
+              if (audio_position_slider.Value != ratio)
+              {
+                audio_position_slider.Value = ratio;
+              }
+            }
+
+            var pos_text = $"{(int)ct.TotalMinutes}:{ct.Seconds:00} / {(int)tt.TotalMinutes}:{tt.Seconds:00}";
+            if (position_text_display.Text != pos_text)
+            {
+              position_text_display.Text = pos_text;
+            }
+
+            if (playlist.SelectedIndex != musicPlayer.CurrentMusicIndex - 1 && !playlist.IsMouseOver)
+            {
+              playlist.SelectedIndex = musicPlayer.CurrentMusicIndex - 1;
+            }
+          }
+          else
+          {
+            if (audio_position_slider.Value != 0)
+            {
+              audio_position_slider.Value = 0;
+            }
+
+            if (position_text_display.Text != "0:00 / 0:00")
+            {
+              position_text_display.Text = "0:00 / 0:00";
+            }
+          }
+        }, DispatcherPriority.DataBind, token);
+      }
+      catch (TaskCanceledException)
+      {
+        Trace.WriteLine("Task cancelled updating track position");
+      }
     }
 
     private void Window_Closing(object sender, EventArgs e)
     {
       Properties.Settings.Default.Device = (string)DeviceChoice.SelectedValue;
-      Properties.Settings.Default.Repeat = (byte)player.RepeatSetting;
+      Properties.Settings.Default.Repeat = (byte)musicPlayer.RepeatSetting;
       Properties.Settings.Default.Volume = volume_slider.Value;
       Properties.Settings.Default.Speed = speed_slider.Value;
-      Properties.Settings.Default.UpdateRate = (uint)thread_rate_slider.Value;
-      Properties.Settings.Default.LastPlaylist = new System.Collections.Specialized.StringCollection();
-      Properties.Settings.Default.LastPlaylist.AddRange(filePaths.ToArray());
+      Properties.Settings.Default.LastPlaylist = new();
+      Properties.Settings.Default.LastPlaylist.AddRange(playListItems.Select(item => item.FilePath).ToArray());
       Properties.Settings.Default.Save();
 
-      if (player != null)
-        player.Dispose();
+      globalHook?.Dispose();
+      musicPlayer?.Dispose();
+      cpuTimer.Dispose();
+      infoTextTimer.Dispose();
 
-      ni.Visible = false;
+      windowNotifyIcon.Dispose();
+      icon.Dispose();
     }
     #endregion
 
-    public static int[] PitchCorrection(float rate)
+    public static (int semitones, int cents) PitchCorrection(float rate)
     {
-      float pitch_correction_cents_total = 1200 * (float)(Math.Log(1 / rate) / Math.Log(2));
-      int pitch_correction_semitones;
-      float pitch_correction_cents;
+      float pitchCorrectionCentsTotal = 1200 * (float)(Math.Log(1 / rate) / Math.Log(2));
+      int pitchCorrectionSemitones;
+      float pitchCorretionCents;
 
-      if (pitch_correction_cents_total > 1250)
+      if (pitchCorrectionCentsTotal > 1250)
       {
-        pitch_correction_semitones = 12;
-        pitch_correction_cents = 50;
+        pitchCorrectionSemitones = 12;
+        pitchCorretionCents = 50;
       }
-      else if (pitch_correction_cents_total < -1250)
+      else if (pitchCorrectionCentsTotal < -1250)
       {
-        pitch_correction_semitones = -12;
-        pitch_correction_cents = -50;
+        pitchCorrectionSemitones = -12;
+        pitchCorretionCents = -50;
       }
       else
       {
-        pitch_correction_semitones = (int)(pitch_correction_cents_total / 100); // Truncate
-        pitch_correction_cents = pitch_correction_cents_total - pitch_correction_semitones * 100;
+        pitchCorrectionSemitones = (int)(pitchCorrectionCentsTotal / 100); // Truncate
+        pitchCorretionCents = pitchCorrectionCentsTotal - pitchCorrectionSemitones * 100;
 
-        if (pitch_correction_cents > 50)
+        if (pitchCorretionCents > 50)
         {
-          pitch_correction_semitones = pitch_correction_semitones + 1;
-          pitch_correction_cents = pitch_correction_cents - 100;
+          pitchCorrectionSemitones = pitchCorrectionSemitones + 1;
+          pitchCorretionCents = pitchCorretionCents - 100;
         }
-        else if (pitch_correction_cents < -50)
+        else if (pitchCorretionCents < -50)
         {
-          pitch_correction_semitones = pitch_correction_semitones - 1;
-          pitch_correction_cents = pitch_correction_cents + 100;
+          pitchCorrectionSemitones = pitchCorrectionSemitones - 1;
+          pitchCorretionCents = pitchCorretionCents + 100;
         }
       }
 
-      int[] pitch_out = new int[] { pitch_correction_semitones, (int)Math.Round(pitch_correction_cents) };
-      return pitch_out;
+      return (pitchCorrectionSemitones, (int)Math.Round(pitchCorretionCents));
     }
 
     private void pitchShiftCheckbox_Checked(object sender, RoutedEventArgs e)
@@ -495,28 +545,23 @@ namespace OpenALMusicPlayer
 
     private void ThreadTimeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
-      if (player != null)
-        //player.UpdateRate = (uint)e.NewValue; TODO: remove this slider
-
-      if (InfoText != null)
-        InfoText.Interval = (int)e.NewValue;
     }
 
     private void repeatRadioButtons_checked(object sender, RoutedEventArgs e)
     {
-      if (player != null)
+      if (musicPlayer != null)
       {
         if (sender == radioRepeatAll)
         {
-          player.RepeatSetting = RepeatType.All;
+          musicPlayer.RepeatSetting = RepeatType.All;
         }
         else if (sender == radioRepeatSong)
         {
-          player.RepeatSetting = RepeatType.Song;
+          musicPlayer.RepeatSetting = RepeatType.Song;
         }
         else if (sender == radioRepeatNone)
         {
-          player.RepeatSetting = RepeatType.No;
+          musicPlayer.RepeatSetting = RepeatType.No;
         }
       }
     }

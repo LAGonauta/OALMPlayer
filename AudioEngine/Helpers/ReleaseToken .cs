@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Threading;
 
-namespace OpenALMusicPlayer.Helpers
+namespace AudioEngine.Helpers
 {
   public readonly struct ReleaseToken : IDisposable
   {
