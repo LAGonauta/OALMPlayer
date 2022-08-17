@@ -118,7 +118,7 @@ namespace AudioEngine
         }
 
         var currentTime = audioFile.GetPosition().TotalMilliseconds / 1000;
-        var interval = streamingBufferTime / 2;
+        var interval = streamingBufferTime / 4;
         var soundData = new byte[streamingBufferSize];
         var initialized = false;
         using var bufferPool = new BufferPool(hasXram);
